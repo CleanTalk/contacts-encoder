@@ -7,6 +7,7 @@ use Cleantalk\Common\ContactsEncoder\Dto\Params;
 use Cleantalk\Common\ContactsEncoder\Encoder\Encoder;
 use Cleantalk\Common\ContactsEncoder\Exclusions\ExclusionsService;
 use Cleantalk\Common\ContactsEncoder\Obfuscator\Obfuscator;
+use Cleantalk\Common\ContactsEncoder\Obfuscator\ObfuscatorEmailData;
 
 /**
  * Contacts Encoder common class.
@@ -119,6 +120,10 @@ abstract class ContactsEncoder
         return static::$instance;
     }
 
+    /**
+     * @return void
+     * @psalm-suppress PossiblyUnusedMethod
+     */
     public function dropInstance()
     {
         self::$instance = null;
@@ -153,6 +158,12 @@ abstract class ContactsEncoder
         return $this->modifyContent($content);
     }
 
+    /**
+     * @param $encoded_contacts_data
+     *
+     * @return array
+     * @psalm-suppress PossiblyUnusedMethod
+     */
     public function runDecoding($encoded_contacts_data)
     {
         return $this->decodeContactData($encoded_contacts_data);
@@ -593,7 +604,7 @@ abstract class ContactsEncoder
      * @param string $obfuscated_string
      * @param string $mode
      * @param string $replacing_text
-     * @param Obfuscator|false $email_chunks_data
+     * @param ObfuscatorEmailData|false $email_chunks_data
      *
      * @return string
      */
@@ -635,7 +646,7 @@ abstract class ContactsEncoder
     }
 
     /**
-     * @param Obfuscator $email_chunks
+     * @param ObfuscatorEmailData $email_chunks
      *
      * @return string
      */
