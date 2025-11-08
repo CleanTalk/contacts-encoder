@@ -32,8 +32,5 @@
       "dealerdirect/phpcodesniffer-composer-installer": true,
       "cleantalk/apbct-installer": true
     }
-  },
-  "autoload": {
-    "Cleantalk\\Common\\ContactsEncoder": "."
   }
 }
