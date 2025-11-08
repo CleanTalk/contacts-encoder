@@ -18,7 +18,7 @@
         limitMethodComplexity="true"
 >
     <projectFiles>
-        <directory name="../"/>
+        <directory name="../" />
         <ignoreFiles allowMissingFiles="true">
             <directory name="../lib"/>
             <directory name="../tests"/>

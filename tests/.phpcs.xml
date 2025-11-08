@@ -25,6 +25,12 @@
 	<!-- https://github.com/PHPCompatibility/PHPCompatibility#sniffing-your-code-for-compatibility-with-specific-php-versions -->
 	<config name="testVersion" value="5.6-"/>
 
+    <rule ref="PHPCompatibility">
+        <exclude name="PHPCompatibility.ParameterValues.NewHTMLEntitiesFlagsDefault.NotSet"/>
+        <exclude name="PHPCompatibility.Attributes.NewAttributes.Found"/>
+        <exclude name="PHPCompatibility.FunctionDeclarations.RemovedCallingDestructAfterConstructorExit" />
+    </rule>
+
 	<rule ref="PHPCompatibility"/>
 	<rule ref="PSR12"/>
 </ruleset>
