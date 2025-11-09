@@ -149,8 +149,9 @@ abstract class ContactsEncoder
 
     /**
      * @param $content
-     * @return mixed|string
+     * @return voind|mixed|string
      * @psalm-suppress PossiblyUnusedMethod
+     * @psalm-suppress PossiblyUnusedReturnValue
      */
     public function runEncoding($content = '')
     {
