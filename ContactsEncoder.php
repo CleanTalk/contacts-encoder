@@ -149,7 +149,7 @@ abstract class ContactsEncoder
 
     /**
      * @param $content
-     * @return voind|mixed|string
+     * @return void|mixed|string
      * @psalm-suppress PossiblyUnusedMethod
      * @psalm-suppress PossiblyUnusedReturnValue
      */
