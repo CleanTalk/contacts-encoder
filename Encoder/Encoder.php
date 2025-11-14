@@ -84,7 +84,7 @@ class Encoder
         if (!empty($attempts->final_string)) {
             $decoded_string = $attempts->final_string;
         } else {
-            $tmpl = __('decrypt attempts failed, ssl: %s, str_base: %s');
+            $tmpl = 'decrypt attempts failed, ssl: %s, str_base: %s';
             $tmpl = sprintf($tmpl, $attempts->ssl_error, $attempts->str_base_error);
             // @ToDo refactor errors handling
             $apbct->errorAdd('email_encoder', $tmpl);
