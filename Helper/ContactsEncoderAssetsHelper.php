@@ -2,6 +2,9 @@
 
 namespace Cleantalk\Common\ContactsEncoder\Helper;
 
+/**
+ * @psalm-suppress UnusedClass
+ */
 class ContactsEncoderAssetsHelper
 {
     public static function getCssPath()

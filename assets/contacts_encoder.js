@@ -5,12 +5,19 @@
  * @property {Object} texts
  * @property {string} texts.waitForDecoding
  * @property {string} texts.decodingProcess
- * @property {function(encodedStrings: String<JSON>): Promise<any>} decodeContactsRequest
+ * @property {string} texts.clickToSelect
+ * @property {string} texts.originalContactsData
+ * @property {string} texts.gotIt
+ * @property {string} texts.blocked
+ * @property {string} texts.canNotConnect
+ * @property {string} texts.cannotDecode
+ * @property {string} texts.contactsEncoder
+ * @property {function(encodedStrings: String<JSON>): String<JSON>} decodeContactsRequest
  */
 class ContactsEncoder {
-    static DEFAULTS = {
+    static CONFIG_DEFAULTS = {
         serviceData: {
-            brandName: 'CleanTalks Contacts Encoder'
+            brandName: 'CleanTalk Contacts Encoder'
         },
         texts: {
             waitForDecoding: 'The magic is on the way!',
@@ -23,7 +30,11 @@ class ContactsEncoder {
             cannotDecode: 'Can not decode email. Unknown reason',
             contactsEncoder: 'CleanTalk Contacts Encoder',
         },
-        decodeContactsRequest: (event, encodedNodes, clickSource) => {
+        /**
+         * @param {string} encodedNodes JSON of encoded nodes
+         * @return {string} JSON of encoded nodes {success: bool, data: [compiled response data]}
+         */
+        decodeContactsRequest: (encodedNodes) => {
             /**
              * @override Please, override this method by custom config object.
              */
@@ -42,7 +53,7 @@ class ContactsEncoder {
      * @param {ContactsEncoderConfig} config
      */
     constructor(config = {}) {
-        this.config = { ...ContactsEncoder.DEFAULTS, ...config };
+        this.config = { ...ContactsEncoder.CONFIG_DEFAULTS, ...config };
 
         this.validateRequiredMethods();
         this.bindMethods();
@@ -78,13 +89,14 @@ class ContactsEncoder {
         if (!popup) {
             popup = this.createPopup();
             document.body.appendChild(popup);
-        }
-        const popupText = document.getElementById('apbct_popup_text');
-        if (popupText) {
-            popupText.innerHTML = `
-                <p class="apbct-email-encoder-elements_center">${this.config.texts.waitForDecoding}</p>
-                <p>${this.config.texts.decodingProcess}</p>
+        } else {
+            const popupText = document.getElementById('apbct_popup_text');
+            if (popupText) {
+                popupText.innerHTML = `
+                <p id="apbct_email_ecoder__popup_text_node_first" class="apbct-email-encoder-elements_center">${this.config.texts.waitForDecoding}</p>
+                <p id="apbct_email_ecoder__popup_text_node_second">${this.config.texts.decodingProcess}</p>
             `;
+            }
         }
         popup.style.display = 'block';
     }
@@ -99,8 +111,8 @@ class ContactsEncoder {
                 <p class="apbct-email-encoder--popup-header">${this.config.serviceData.brandName}</p>
             </span>
             <div id="apbct_popup_text" class="apbct-email-encoder-elements_center" style="color: black;">
-                <p class="apbct-email-encoder-elements_center">${this.config.texts.waitForDecoding}</p>
-                <p>${this.config.texts.decodingProcess}</p>
+                <p id="apbct_email_ecoder__popup_text_node_first" class="apbct-email-encoder-elements_center">${this.config.texts.waitForDecoding}</p>
+                <p id="apbct_email_ecoder__popup_text_node_second">${this.config.texts.decodingProcess}</p>
             </div>
             ${this.createAnimation()}
         `;
@@ -155,6 +167,7 @@ class ContactsEncoder {
 
         Promise.resolve(this.config.decodeContactsRequest(originalStrings))
             .then(result => {
+                //@ToDo we can set cookie here to remember decoding success for this visitor
                 this.handleDecodedData(result, this.encodedNodes, target);
             })
             .catch(error => {
