@@ -124,7 +124,7 @@ class ContactsEncoder {
      * @param event
      * @return {Promise<*>}
      */
-    async decodeContactsHandler(event) {
+    decodeContactsHandler(event) {
         const target = event.currentTarget;
         target.removeEventListener('click', this.decodeContactsHandler);
         this.showPopup();
@@ -158,12 +158,13 @@ class ContactsEncoder {
                 this.handleDecodedData(result, this.encodedNodes, target);
             })
             .catch(error => {
-                this.handleDecodeError(error, target);
+                this.handleDecodeError(error);
             });
     }
 
     handleDecodeError(error) {
-
+        this.resetEncodedNodes();
+        this.showDecodeComment(error);
     }
 
     handleDecodedData(result, encodedEmailNodes, clickSource) {
