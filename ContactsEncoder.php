@@ -187,9 +187,9 @@ abstract class ContactsEncoder
      * @return string
      * @psalm-suppress PossiblyUnusedReturnValue
      */
-    public function modifyContent($content)
+    public function modifyContent($content, $skip_exclusions = false)
     {
-        if ( $this->exclusions->doReturnContentBeforeModify($content) ) {
+        if ( ! $skip_exclusions && $this->exclusions->doReturnContentBeforeModify($content) ) {
             return $content;
         }
 
