@@ -64,6 +64,15 @@ class ContactsEncoder {
         document.addEventListener('DOMContentLoaded', () => {
             this.encodedNodes = document.querySelectorAll('[data-original-string]');
             this.encodedNodes.forEach(node => {
+                if (node.parentNode &&
+                    node.parentNode.tagName === 'A' &&
+                    node.parentNode.getAttribute('href')?.includes('mailto:') &&
+                    node.parentNode.hasAttribute('data-original-string'))
+                {
+                    console.log('This node skipped')
+                    console.log(node)
+                    return;
+                }
                 node.addEventListener('click', this.decodeContactsHandler);
             });
         });
@@ -142,7 +151,6 @@ class ContactsEncoder {
         this.showPopup();
 
         let encodedEmailsCollection = {};
-
         for (let i = 0; i < this.encodedNodes.length; i++) {
             // disable click for mailto
             if (
