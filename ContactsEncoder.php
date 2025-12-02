@@ -301,14 +301,13 @@ abstract class ContactsEncoder
     private function getPhonesPattern()
     {
         $patterns = [
-            'tel:\+\d{8,12}',                         // tel:+XXXXXXXXXX
-            '\+\d{1,3}\.\d{3}\.\d{3}\.\d{4}',         // +X.XXX.XXX.XXXX
-            '\(\d{3}\)[-\s]?\d{3}[-\s]?\d{4}',         // (XXX) XXX-XXXX, (XXX) XXX XXXX
-            '\+\d[\d\s\-().]{7,}[\d\-](?!\d)',        // standards
+            '(tel:\+\d{8,12})',                         // tel:+XXXXXXXXXX
+            '([\+][\s-]?\(?\d[\d\s\-()]{7,}\d)',         //
+            '(\(\d{3}\)\s?\d{3}-\d{4})',         // (XXX) XXX-XXXX, (XXX) XXX XXXX
+            '(\+\d{1,3}\.\d{1,3}\.((\d{3}\.\d{4})|\d{7})(?![\w.]))',        // +X?.XX?.XXX.XXXX
         ];
 
-        $pattern = '/(?<!\.\d)(?<!\.)(?:' . implode('|', $patterns) . ')(?!\.\d)/';
-
+        $pattern = '/' . implode('|', $patterns) . '/' ;
         return $pattern;
     }
 
