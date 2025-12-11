@@ -22,7 +22,7 @@ abstract class ContactsEncoder
     /**
      * @var ContactsEncoderHelper
      */
-    private $helper;
+    protected $helper;
 
     /**
      * @var ExclusionsService
@@ -33,18 +33,15 @@ abstract class ContactsEncoder
      * Temporary content to use in regexp callback
      * @var string
      */
-    private $temp_content;
+    protected $temp_content;
 
     /**
      * Regular expressions parts.
      */
-    private const ARIA_LABEL_PATTERN = '/aria-label.?=.?[\'"].+?[\'"]/';
-    private const EMAIL_LOCAL_PART = '[_A-Za-z0-9-\.]+';
-    private const EMAIL_DOMAIN = '[_A-Za-z0-9-\.]+';
-    private const EMAIL_TLD = '[A-Za-z]{2,}';
-    private const EMAIL_PATTERN = self::EMAIL_LOCAL_PART . '@' . self::EMAIL_DOMAIN . '\.' . self::EMAIL_TLD;
-    private const PHONE_NUMBER = '\+\d{8,12}';
-    private const PHONE_NUMBERS_PATTERNS = [
+    const ARIA_LABEL_PATTERN = '/aria-label.?=.?[\'"].+?[\'"]/';
+    const EMAIL_PATTERN = '[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}';
+    const PHONE_NUMBER = '\+\d{8,12}';
+    const PHONE_NUMBERS_PATTERNS = [
         '(tel:' . self::PHONE_NUMBER . ')',                        // tel:+XXXXXXXXXX
         '([\+][\s-]?\(?\d[\d\s\-()]{7,}\d)',                       // +X XXX XXXXXXX, +X(XXX)XXXXX, etc.
         '(\(\d{3}\)\s?\d{3}-\d{4})',                               // (XXX) XXX-XXXX, (XXX) XXX XXXX
@@ -54,22 +51,22 @@ abstract class ContactsEncoder
     /**
      * @var string example: '/aria-label.?=.?[\'"].+?[\'"]/'
      */
-    private $aria_regex;
+    protected $aria_regex;
 
     /**
      * @var string example: '/(mailto\:\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b)|(\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+(\.[A-Za-z]{2,}\b))/'
      */
-    private $global_email_pattern;
+    protected $global_email_pattern;
 
     /**
      * @var string example: '/(tel:\+\d{8,12})|([\+][\s-]?\(?\d[\d\s\-()]{7,}\d)|(\(\d{3}\)\s?\d{3}-\d{4})|(\+\d{1,3}\.\d{1,3}\.((\d{3}\.\d{4})|\d{7})(?![\w.]))'/'
      */
-    private $global_phones_pattern;
+    protected $global_phones_pattern;
 
     /**
      * @var string example: '/mailto\:(\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,})/'
      */
-    private $global_mailto_pattern;
+    protected $global_mailto_pattern;
 
     /**
      * @var string example: '/(\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b)/'
@@ -80,47 +77,47 @@ abstract class ContactsEncoder
      * @var string example: '/\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}/'
      * @ToDo Is this regular expression needed? A little different against `$plain_email_pattern`.
      */
-    private $plain_email_pattern_without_capturing;
+    protected $plain_email_pattern_without_capturing;
 
     /**
      * @var string example: '/tel:(\+\d{8,12})/'
      * @ToDo Is this regexp is actual and right?
      */
-    private $global_tel_pattern;
+    protected $global_tel_pattern;
 
     /**
      * @var array
      */
-    private $aria_matches = array();
+    protected $aria_matches = array();
 
     /**
      * Attributes with possible email-like content to drop from the content to avoid unnecessary encoding.
      * Key is a tag we want to find, value is an attribute with email to drop.
      * @var array
      */
-    private static $attributes_to_drop = array(
+    protected static $attributes_to_drop = array(
         'a' => 'title',
     );
 
     /**
      * @var string
      */
-    private $global_obfuscation_mode;
+    protected $global_obfuscation_mode;
 
     /**
      * @var string
      */
-    private $global_replacing_text;
+    protected $global_replacing_text;
 
     /**
      * @var int|mixed
      */
-    private $do_encode_emails;
+    protected $do_encode_emails;
 
     /**
      * @var int|mixed
      */
-    private $do_encode_phones;
+    protected $do_encode_phones;
 
     /**
      * @var bool
