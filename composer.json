@@ -9,7 +9,7 @@
   ],
   "license": "GPL-3.0-or-later",
   "require": {
-    "cleantalk/antispam": "@Composer-package-type-removed-VI"
+    "cleantalk/antispam": "dev-Composer-package-type-removed-VI"
   },
   "require-dev": {
     "vimeo/psalm": "^4.8",
