@@ -2,6 +2,8 @@
 
 namespace Cleantalk\Common\ContactsEncoder;
 
+use Cleantalk\Common\Antispam\Cleantalk;
+use Cleantalk\Common\Antispam\CleantalkRequest;
 use Cleantalk\Common\ContactsEncoder\Helper\ContactsEncoderHelper;
 use Cleantalk\Common\ContactsEncoder\Dto\Params;
 use Cleantalk\Common\ContactsEncoder\Encoder\Encoder;
@@ -12,8 +14,12 @@ use Cleantalk\Common\ContactsEncoder\Obfuscator\ObfuscatorEmailData;
 /**
  * Contacts Encoder common class.
  */
-abstract class ContactsEncoder
+class ContactsEncoder
 {
+    const VERSION = '2.0.13';
+
+    protected $api_key;
+
     /**
      * @var Encoder
      */
@@ -130,6 +136,10 @@ abstract class ContactsEncoder
      */
     protected $is_logged_in = false;
 
+    protected $request_result_comment;
+
+    protected $decoded_contacts_array = [];
+
     protected static $instance;
 
     public function __construct()
@@ -178,6 +188,7 @@ abstract class ContactsEncoder
      */
     protected function init($params)
     {
+        $this->api_key = $params->api_key;
         $this->exclusions = new ExclusionsService($params);
         $this->encoder = new Encoder(md5($params->api_key));
         $this->helper = new ContactsEncoderHelper();
@@ -229,6 +240,7 @@ abstract class ContactsEncoder
     public function runDecoding($encoded_contacts_data)
     {
         $decoded_strings = $this->decodeContactData($encoded_contacts_data);
+        $this->decoded_contacts_array = $decoded_strings;
         // @ToDo Check connections errors during checkRequest and return success:false
         return json_encode([
             'success' => true,
@@ -800,9 +812,63 @@ abstract class ContactsEncoder
      *
      * @return bool returns json string to the JS
      */
-    abstract protected function checkRequest();
+    protected function checkRequest()
+    {
+        $event_javascript_data = '';
+        $event_token = '';
+        if ( isset($_POST['event_token']) ) {
+            $event_token = (string) $_POST['event_token'];
+        } elseif ( isset($_POST['event_javascript_data']) ) {
+            $event_javascript_data = (string) $_POST['event_javascript_data'];
+        }
 
-    abstract protected function getCheckRequestComment();
+        $params = array(
+            'auth_key'              => $this->api_key,        // Access key
+            'agent'                 => 'contacts_encoder_lib_' . self::VERSION,
+            'event_token'           => $event_token, // Unique event ID
+            'event_javascript_data' => $event_javascript_data, // JSON-string params to analysis
+            'sender_ip'             => $_SERVER['REMOTE_ADDR'],        // IP address
+            'event_type'            => 'CONTACT_DECODING',     // 'GENERAL_BOT_CHECK' || 'CONTACT_DECODING'
+            'message_to_log'        => json_encode(array_values($this->decoded_contacts_array), JSON_FORCE_OBJECT),   // Custom message
+            'page_url'              => $_SERVER['REQUEST_URI'],
+            'sender_info'           => array(
+                'site_referrer'         => $_SERVER['HTTP_REFERER'],
+            ),
+        );
+
+        $ct_request = new CleantalkRequest($params);
+
+        $ct = new Cleantalk();
+        $this->has_connection_error = false;
+
+        // Options store url without scheme because of DB error with ''://'
+        $config             = ct_get_server();
+        $ct->server_url     = 'https://moderate.cleantalk.org';
+        $ct->work_url       = 'https://moderate.cleantalk.org';
+        $api_response = $ct->checkBot($ct_request);
+
+        // Allow to see to the decoded contact if error occurred
+        // Send error as comment in this case
+        if ( ! empty($api_response->errstr)) {
+            $this->comment = $api_response->errstr;
+            $this->has_connection_error = true;
+            return true;
+        }
+
+        $stub_comment = $api_response->allow
+            ? 'Allowed'
+            : 'Blocked';
+
+        $this->comment = ! empty($api_response->comment) ? $api_response->comment : $stub_comment;
+
+        return $api_response->allow === 1;
+        $this->request_result_comment = '';
+    }
+
+    protected function getCheckRequestComment()
+    {
+        return $this->request_result_comment;
+    }
 
     /**
      * @param $decoded_emails_array
