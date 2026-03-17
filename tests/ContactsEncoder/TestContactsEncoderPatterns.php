@@ -51,7 +51,7 @@ class ContactsEncoderPatternsTest extends TestCase
 
         $encoder = $this->createConcreteContactsEncoder($this->getTestParams());
         $ariaRegex = $encoder->getProperty('aria_regex');
-        $this->assertEquals('/aria-label.?=.?[\'"].+?[\'"]/', $ariaRegex);
+        $this->assertEquals('/aria-label\s*=\s*(["\'])(?:(?!\1).)*\1/', $ariaRegex);
     }
 
     public function testGlobalEmailPatternProperty()
