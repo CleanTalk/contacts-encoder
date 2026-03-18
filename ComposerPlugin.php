@@ -3,6 +3,8 @@
 namespace Cleantalk\Common\ContactsEncoder;
 
 use Composer\Composer;
+use Composer\DependencyResolver\Operation\InstallOperation;
+use Composer\DependencyResolver\Operation\UpdateOperation;
 use Composer\EventDispatcher\EventSubscriberInterface;
 use Composer\Installer\PackageEvent;
 use Composer\Installer\PackageEvents;
@@ -13,6 +15,7 @@ use Composer\Script\ScriptEvents;
 
 /**
  * Composer Plugin to display a thank you message after installation.
+ * @psalm-suppress UnusedClass
  */
 class ComposerPlugin implements PluginInterface, EventSubscriberInterface
 {
@@ -85,7 +88,11 @@ class ComposerPlugin implements PluginInterface, EventSubscriberInterface
      */
     public function onPackageInstall(PackageEvent $event)
     {
-        $package = $event->getOperation()->getPackage();
+        $operation = $event->getOperation();
+        if (!$operation instanceof InstallOperation) {
+            return;
+        }
+        $package = $operation->getPackage();
         if ($package->getName() === self::PACKAGE_NAME) {
             $this->displayMessage($event->getIO());
         }
@@ -99,7 +106,11 @@ class ComposerPlugin implements PluginInterface, EventSubscriberInterface
      */
     public function onPackageUpdate(PackageEvent $event)
     {
-        $package = $event->getOperation()->getTargetPackage();
+        $operation = $event->getOperation();
+        if (!$operation instanceof UpdateOperation) {
+            return;
+        }
+        $package = $operation->getTargetPackage();
         if ($package->getName() === self::PACKAGE_NAME) {
             $this->displayMessage($event->getIO());
         }
