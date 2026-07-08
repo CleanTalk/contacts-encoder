@@ -16,7 +16,7 @@ use Cleantalk\Common\ContactsEncoder\Obfuscator\ObfuscatorEmailData;
  */
 class ContactsEncoder
 {
-    const VERSION = '2.0.13';
+    const VERSION = '2.0.19';
 
     protected $api_key;
 
@@ -151,6 +151,8 @@ class ContactsEncoder
     protected $is_logged_in = false;
 
     protected $request_result_comment;
+
+    protected $has_connection_error = false;
 
     protected $decoded_contacts_array = [];
 
@@ -843,7 +845,7 @@ class ContactsEncoder
             'message_to_log'        => json_encode(array_values($this->decoded_contacts_array), JSON_FORCE_OBJECT),   // Custom message
             'page_url'              => $_SERVER['REQUEST_URI'],
             'sender_info'           => array(
-                'site_referrer'         => $_SERVER['HTTP_REFERER'],
+                'site_referrer'         => isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '',
             ),
         );
 
@@ -852,16 +854,13 @@ class ContactsEncoder
         $ct = new Cleantalk();
         $this->has_connection_error = false;
 
-        // Options store url without scheme because of DB error with ''://'
-        $config             = ct_get_server();
-        $ct->server_url     = 'https://moderate.cleantalk.org';
-        $ct->work_url       = 'https://moderate.cleantalk.org';
+        $ct->server_url = 'https://moderate.cleantalk.org';
+        $ct->work_url = 'https://moderate.cleantalk.org';
         $api_response = $ct->checkBot($ct_request);
 
-        // Allow to see to the decoded contact if error occurred
-        // Send error as comment in this case
+        // Allow to see the decoded contact if error occurred.
         if ( ! empty($api_response->errstr)) {
-            $this->comment = $api_response->errstr;
+            $this->request_result_comment = $api_response->errstr;
             $this->has_connection_error = true;
             return true;
         }
@@ -870,10 +869,9 @@ class ContactsEncoder
             ? 'Allowed'
             : 'Blocked';
 
-        $this->comment = ! empty($api_response->comment) ? $api_response->comment : $stub_comment;
+        $this->request_result_comment = ! empty($api_response->comment) ? $api_response->comment : $stub_comment;
 
         return $api_response->allow === 1;
-        $this->request_result_comment = '';
     }
 
     protected function getCheckRequestComment()
