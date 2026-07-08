@@ -152,8 +152,6 @@ class ContactsEncoder
 
     protected $request_result_comment;
 
-    protected $has_connection_error = false;
-
     protected $decoded_contacts_array = [];
 
     protected static $instance;
@@ -829,10 +827,10 @@ class ContactsEncoder
     {
         $event_javascript_data = '';
         $event_token = '';
-        if ( isset($_POST['event_token']) ) {
-            $event_token = (string) $_POST['event_token'];
-        } elseif ( isset($_POST['event_javascript_data']) ) {
-            $event_javascript_data = (string) $_POST['event_javascript_data'];
+        if ( isset($_POST['event_token']) && is_string($_POST['event_token']) ) {
+            $event_token = $_POST['event_token'];
+        } elseif ( isset($_POST['event_javascript_data']) && is_string($_POST['event_javascript_data']) ) {
+            $event_javascript_data = $_POST['event_javascript_data'];
         }
 
         $params = array(
@@ -840,10 +838,10 @@ class ContactsEncoder
             'agent'                 => 'contacts_encoder_lib_' . self::VERSION,
             'event_token'           => $event_token, // Unique event ID
             'event_javascript_data' => $event_javascript_data, // JSON-string params to analysis
-            'sender_ip'             => $_SERVER['REMOTE_ADDR'],        // IP address
+            'sender_ip'             => isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '',
             'event_type'            => 'CONTACT_DECODING',     // 'GENERAL_BOT_CHECK' || 'CONTACT_DECODING'
             'message_to_log'        => json_encode(array_values($this->decoded_contacts_array), JSON_FORCE_OBJECT),   // Custom message
-            'page_url'              => $_SERVER['REQUEST_URI'],
+            'page_url'              => isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '',
             'sender_info'           => array(
                 'site_referrer'         => isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '',
             ),
@@ -852,7 +850,6 @@ class ContactsEncoder
         $ct_request = new CleantalkRequest($params);
 
         $ct = new Cleantalk();
-        $this->has_connection_error = false;
 
         $ct->server_url = 'https://moderate.cleantalk.org';
         $ct->work_url = 'https://moderate.cleantalk.org';
@@ -861,7 +858,6 @@ class ContactsEncoder
         // Allow to see the decoded contact if error occurred.
         if ( ! empty($api_response->errstr)) {
             $this->request_result_comment = $api_response->errstr;
-            $this->has_connection_error = true;
             return true;
         }
 
