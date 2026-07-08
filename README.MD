@@ -4,6 +4,10 @@
 
 The Contacts Encoder protects email addresses and phone numbers from spam bots. It requires **4 essential components** to work properly.
 
+![Demo page with encoded email test cases](assets/images/demo-page.png)
+
+*Example: a stand-alone demo page with multiple email encoding scenarios. Click an obfuscated contact to decode it.*
+
 ## 🚀 Complete Setup in 4 Steps
 
 ### Step 1: PHP Backend Setup
