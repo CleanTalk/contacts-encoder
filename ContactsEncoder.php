@@ -367,17 +367,24 @@ class ContactsEncoder
                         return $this->encodeTelLink($matches[0]);
                     }
 
+                    // symbols clearance
                     $item_length = strlen(str_replace([' ', '(', ')', '-', '+', '.'], '', $matches[0]));
+
+                    // check length
                     if ( $item_length > 12 || $item_length < 8 ) {
                         return $matches[0];
                     }
 
+                    // check attribute exclusions
                     if ( $this->helper->hasAttributeExclusions($matches[0][0], $this->temp_content) ) {
                         return $matches[0];
                     }
-                }
 
-                if ( isset($matches[0]) ) {
+                    // check if in script
+                    if ( $this->helper->isInsideScriptTag($matches[0][0], $this->temp_content) ) {
+                        return $matches[0];
+                    }
+
                     return $this->encodeAny(
                         $matches[0],
                         $this->global_obfuscation_mode,
