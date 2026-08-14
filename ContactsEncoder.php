@@ -495,39 +495,6 @@ class ContactsEncoder
     }
 
     /**
-     * Method to process mailto: links. Use this only for PHP 7.4+
-     *
-     * @param $match array
-     * @param $content string
-     *
-     * @return string
-     */
-    private function encodeMailtoLinkV2($match, $content)
-    {
-        $position = $match[1];
-        $q_position = $position + strcspn($content, '\'"', $position);
-        $mailto_link_str = substr($content, $position, $q_position - $position);
-        // Get inner tag text and place it in $matches[1]
-        preg_match($this->global_mailto_pattern, $mailto_link_str, $matches);
-        if ( isset($matches[1]) ) {
-            $mailto_inner_text = preg_replace_callback($this->plain_email_pattern_without_capturing, function ($matches) {
-                if ( isset($matches[0]) ) {
-                    return $this->getObfuscatedEmailString($matches[0]);
-                }
-
-                return '';
-            }, $matches[1]);
-        }
-
-        $mailto_link_str = str_replace('mailto:', '', $mailto_link_str);
-        $encoded = $this->encoder->encodeString($mailto_link_str);
-
-        $text = isset($mailto_inner_text) ? $mailto_inner_text : $mailto_link_str;
-
-        return 'mailto:' . $text . '" data-original-string="' . $encoded . '" title="' . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8');
-    }
-
-    /**
      * Method to process tel: links. For PHP < 7.4
      *
      * @param string $tel_link_str
