@@ -300,83 +300,35 @@ class ContactsEncoder
      */
     public function modifyGlobalEmails($content)
     {
-        $replacing_result = '';
+        $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) {
+            if ( isset($matches[3]) && in_array(strtolower($matches[3]), ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']) && isset($matches[0]) ) {
+                return $matches[0];
+            }
 
-        if ( version_compare(phpversion(), '7.4.0', '>=') ) {
-            $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) use ($content) {
-                if ( isset($matches[3][0], $matches[0][0]) && in_array(strtolower($matches[3][0]), ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']) ) {
-                    return $matches[0][0];
-                }
+            //chek if email is placed in excluded attributes and return unchanged if so
+            if ( isset($matches[0]) && $this->helper->hasAttributeExclusions($matches[0], $this->temp_content) ) {
+                return $matches[0];
+            }
 
-                //chek if email is placed in excluded attributes and return unchanged if so
-                if ( isset($matches[0][0]) && $this->helper->hasAttributeExclusions($matches[0][0], $this->temp_content) ) {
-                    return $matches[0][0];
-                }
+            // skip encoding if the content in script tag
+            if ( isset($matches[0]) && $this->helper->isInsideScriptTag($matches[0], $this->temp_content) ) {
+                return $matches[0];
+            }
 
-                // skip encoding if the content in script tag
-                if ( isset($matches[0][0]) && $this->helper->isInsideScriptTag($matches[0][0], $content) ) {
-                    return $matches[0][0];
-                }
+            if ( isset($matches[0]) && $this->helper->isInsideOptionTag($matches[0], $this->temp_content) ) {
+                return $matches[0];
+            }
 
-                // skip encoding inside select option values/text — breaks form submission
-                if ( isset($matches[0][0]) && $this->helper->isInsideOptionTag($matches[0][0], $content) ) {
-                    return $matches[0][0];
-                }
+            if ( isset($matches[0]) &&  $this->helper->isMailto($matches[0]) ) {
+                return $this->encodeMailtoLink($matches[0]);
+            }
 
-                if ( isset($matches[0][0]) && $this->helper->isMailto($matches[0][0]) ) {
-                    return $this->encodeMailtoLinkV2($matches[0], $content);
-                }
+            if ( isset($matches[0]) ) {
+                return $this->encodePlainEmail($matches[0]);
+            }
 
-                if (
-                    isset($matches[0]) &&
-                    is_array($matches[0]) &&
-                    $this->helper->isMailtoAdditionalCopy($matches[0], $content)
-                ) {
-                    return '';
-                }
-
-                if (
-                    isset($matches[0], $matches[0][0]) &&
-                    is_array($matches[0]) &&
-                    $this->helper->isEmailInLink($matches[0], $content)
-                ) {
-                    return $matches[0][0];
-                }
-
-                if ( isset($matches[0][0]) ) {
-                    return $this->encodePlainEmail($matches[0][0]);
-                }
-
-                return '';
-            }, $content, -1, $count, PREG_OFFSET_CAPTURE);
-        }
-
-        if ( version_compare(phpversion(), '7.4.0', '<') ) {
-            $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) {
-                if ( isset($matches[3]) && in_array(strtolower($matches[3]), ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']) && isset($matches[0]) ) {
-                    return $matches[0];
-                }
-
-                //chek if email is placed in excluded attributes and return unchanged if so
-                if ( isset($matches[0]) && $this->helper->hasAttributeExclusions($matches[0], $this->temp_content) ) {
-                    return $matches[0];
-                }
-
-                if ( isset($matches[0]) && $this->helper->isInsideOptionTag($matches[0], $this->temp_content) ) {
-                    return $matches[0];
-                }
-
-                if ( isset($matches[0]) &&  $this->helper->isMailto($matches[0]) ) {
-                    return $this->encodeMailtoLink($matches[0]);
-                }
-
-                if ( isset($matches[0]) ) {
-                    return $this->encodePlainEmail($matches[0]);
-                }
-
-                return '';
-            }, $content);
-        }
+            return '';
+        }, $content);
 
         // modify content to turn back aria-label
         $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
