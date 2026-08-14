@@ -522,42 +522,6 @@ class ContactsEncoder
     }
 
     /**
-     * Method to process tel: links. Use this only for PHP 7.4+
-     *
-     * @param array $match
-     * @param string $content
-     *
-     * @return string
-     */
-    private function encodeTelLinkV2($match, $content)
-    {
-        $position = !empty($match[1]) ? (int)$match[1] : null;
-        if (null === $position) {
-            return $content;
-        }
-        $q_position = $position + strcspn($content, '\'"', $position);
-        $tel_link_string = substr($content, $position, $q_position - $position);
-        // Get inner tag text and place it in $matches[1]
-        preg_match($this->global_tel_pattern, $tel_link_string, $matches);
-        if ( isset($matches[1]) ) {
-            $tel_inner_text = preg_replace_callback('/' . self::PHONE_NUMBER . '/', function ($matches) {
-                if ( isset($matches[0]) ) {
-                    $obfuscator = new Obfuscator();
-                    return $obfuscator->processPhone($matches[0]);
-                }
-                return '';
-            }, $matches[1]);
-        }
-
-        $tel_link_string = str_replace('tel:', '', $tel_link_string);
-        $encoded = $this->encoder->encodeString($tel_link_string);
-
-        $text = isset($tel_inner_text) ? $tel_inner_text : $tel_link_string;
-
-        return 'tel:' . $text . '" data-original-string="' . $encoded . '" title="' . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8');
-    }
-
-    /**
      * @param string $email_str
      *
      * @return string
