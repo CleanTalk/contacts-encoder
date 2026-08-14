@@ -359,89 +359,37 @@ class ContactsEncoder
     public function modifyGlobalPhoneNumbers($content)
     {
         $phones_pattern = $this->global_phones_pattern;
-        $replacing_result = '';
-
-        if ( version_compare(phpversion(), '7.4.0', '>=') ) {
-            $replacing_result = preg_replace_callback(
-                $phones_pattern,
-                function ($matches) use ($content) {
-                    if ( isset($matches[0]) ) {
-                        $first_group = $matches[0];
-                    } else {
-                        return '';
+        $replacing_result = preg_replace_callback(
+            $phones_pattern,
+            function ($matches) {
+                if ( isset($matches[0]) ) {
+                    if ( $this->helper->isTelTag($matches[0]) ) {
+                        return $this->encodeTelLink($matches[0]);
                     }
 
-                    if ( isset($first_group[0]) ) {
-                        $second_group = $first_group[0];
-                    } else {
-                        return '';
-                    }
-
-                    if (is_array($first_group) && $this->helper->isTelTag($second_group) ) {
-                        return $this->encodeTelLinkV2($first_group, $content);
-                    }
-                    //symbols clearance
-                    $item_length = strlen(str_replace([' ', '(', ')', '-', '+', '.'], '', $second_group));
-                    //check length
+                    $item_length = strlen(str_replace([' ', '(', ')', '-', '+', '.'], '', $matches[0]));
                     if ( $item_length > 12 || $item_length < 8 ) {
-                        return $second_group;
+                        return $matches[0];
                     }
-                    //check attribute exclusions
-                    if ( $this->helper->hasAttributeExclusions($second_group, $this->temp_content) ) {
-                        return $second_group;
+
+                    if ( $this->helper->hasAttributeExclusions($matches[0][0], $this->temp_content) ) {
+                        return $matches[0];
                     }
-                    //check if in script
-                    if ( $this->helper->isInsideScriptTag($second_group, $content) ) {
-                        return $second_group;
-                    }
-                    //do encode
+                }
+
+                if ( isset($matches[0]) ) {
                     return $this->encodeAny(
-                        $second_group,
+                        $matches[0],
                         $this->global_obfuscation_mode,
                         $this->global_replacing_text,
                         true
                     );
-                },
-                $content,
-                -1,
-                $count,
-                PREG_OFFSET_CAPTURE
-            );
-        }
+                }
 
-        if ( version_compare(phpversion(), '7.4.0', '<') ) {
-            $replacing_result = preg_replace_callback(
-                $phones_pattern,
-                function ($matches) {
-                    if ( isset($matches[0]) ) {
-                        if ( $this->helper->isTelTag($matches[0]) ) {
-                            return $this->encodeTelLink($matches[0]);
-                        }
-
-                        $item_length = strlen(str_replace([' ', '(', ')', '-', '+', '.'], '', $matches[0]));
-                        if ( $item_length > 12 || $item_length < 8 ) {
-                            return $matches[0];
-                        }
-
-                        if ( $this->helper->hasAttributeExclusions($matches[0][0], $this->temp_content) ) {
-                            return $matches[0];
-                        }
-                    }
-
-                    if ( isset($matches[0]) ) {
-                        return $this->encodeAny(
-                            $matches[0],
-                            $this->global_obfuscation_mode,
-                            $this->global_replacing_text,
-                            true
-                        );
-                    }
-
-                    return '';
-                },
-                $content
-            );
-        }
+                return '';
+            },
+            $content
+        );
 
         // modify content to turn back aria-label
         $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
