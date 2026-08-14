@@ -83,12 +83,6 @@ class ContactsEncoder
     protected $plain_email_pattern;
 
     /**
-     * @var string example: '/\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}/'
-     * @ToDo Is this regular expression needed? A little different against `$plain_email_pattern`.
-     */
-    protected $plain_email_pattern_without_capturing;
-
-    /**
      * @var string example: '/tel:(\+\d{8,12})/'
      * @ToDo Is this regexp is actual and right?
      */
@@ -223,7 +217,6 @@ class ContactsEncoder
         $this->global_phones_pattern = '/' . implode('|', self::PHONE_NUMBERS_PATTERNS) . '/';
         $this->global_mailto_pattern = '/mailto\:(' . self::EMAIL_PATTERN . ')/';
         $this->plain_email_pattern = '/(\b' . self::EMAIL_PATTERN . '\b)/';
-        $this->plain_email_pattern_without_capturing = '/\b' . self::EMAIL_PATTERN . '/';
         $this->global_tel_pattern = '/tel:(' . self::PHONE_NUMBER . ')/';
     }
 

@@ -86,14 +86,6 @@ class ContactsEncoderPatternsTest extends TestCase
         $this->assertEquals($expected, $pattern);
     }
 
-    public function testPlainEmailPatternWithoutCapturingProperty()
-    {
-        $encoder = $this->createConcreteContactsEncoder($this->getTestParams());
-        $pattern = $encoder->getProperty('plain_email_pattern_without_capturing');
-        $expected = '/\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b/';
-        $this->assertEquals($expected, $pattern);
-    }
-
     public function testGlobalTelPatternProperty()
     {
         $encoder = $this->createConcreteContactsEncoder($this->getTestParams());
