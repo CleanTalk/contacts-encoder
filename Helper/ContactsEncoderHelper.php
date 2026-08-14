@@ -75,15 +75,17 @@ class ContactsEncoderHelper
     /**
      * Checking if email in link
      *
-     * @param array $matches
+     * @param string $email
      * @param string $content
      *
      * @return bool
      */
-    public function isEmailInLink($matches, $content)
+    public function isEmailInLink($email, $content)
     {
-        $email = isset($matches[0]) && is_string($matches[0]) ? $matches[0] : null;
-        $position = isset($matches[1]) ? (int)$matches[1] : null;
+        $position = strpos($content, $email);
+        if ($position === false) {
+            return false;
+        }
 
         if (null === $position || null === $email) {
             return false;
