@@ -46,16 +46,16 @@ class ContactsEncoderHelper
     /**
      * Checking if the string contains mailto: link
      *
-     * @param array $match
+     * @param string $email
      * @param string $content
      *
      * @return bool
      */
-    public function isMailtoAdditionalCopy($match, $content)
+    public function isMailtoAdditionalCopy($email, $content)
     {
-        $position = isset($match[1]) ? (int)$match[1] : null;
+        $position = strpos($content, $email);
 
-        if (null === $position) {
+        if ($position === false) {
             return false;
         }
 

@@ -325,6 +325,12 @@ class ContactsEncoder
                 return $matches[0];
             }
 
+            if (
+                isset($matches[0]) && $this->helper->isMailtoAdditionalCopy($matches[0], $this->temp_content)
+            ) {
+                return '';
+            }
+
             if ( isset($matches[0]) &&  $this->helper->isMailto($matches[0]) ) {
                 return $this->encodeMailtoLink($matches[0]);
             }
