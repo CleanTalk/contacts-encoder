@@ -313,12 +313,6 @@ class ContactsEncoder
             }
 
             if (
-                isset($matches[0]) && $this->helper->isEmailInLink($matches[0], $this->temp_content)
-            ) {
-                return $matches[0];
-            }
-
-            if (
                 isset($matches[0]) && $this->helper->isMailtoAdditionalCopy($matches[0], $this->temp_content)
             ) {
                 return '';

@@ -73,34 +73,6 @@ class ContactsEncoderHelper
     }
 
     /**
-     * Checking if email in link
-     *
-     * @param string $email
-     * @param string $content
-     *
-     * @return bool
-     */
-    public function isEmailInLink($email, $content)
-    {
-        $position = strpos($content, $email);
-        if ($position === false) {
-            return false;
-        }
-
-        if (null === $position || null === $email) {
-            return false;
-        }
-
-        $href_position = strrpos(substr($content, 0, $position), 'href=');
-
-        if ( $href_position !== false && $href_position + 6 == $position ) {
-            return true;
-        }
-
-        return strpos($email, 'mailto:') !== false;
-    }
-
-    /**
      * Check if the given email is inside an option element text (not attributes).
      *
      * @param string $email
