@@ -456,7 +456,7 @@ class ContactsEncoder
     }
 
     /**
-     * Method to process mailto: links. For PHP < 7.4
+     * Method to process mailto: links.
      *
      * @param string $mailto_link_str
      *
@@ -482,7 +482,7 @@ class ContactsEncoder
     }
 
     /**
-     * Method to process tel: links. For PHP < 7.4
+     * Method to process tel: links.
      *
      * @param string $tel_link_str
      *
