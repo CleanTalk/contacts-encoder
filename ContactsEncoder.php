@@ -363,12 +363,12 @@ class ContactsEncoder
                     }
 
                     // check attribute exclusions
-                    if ( $this->helper->hasAttributeExclusions($matches[0][0], $this->temp_content) ) {
+                    if ( $this->helper->hasAttributeExclusions($matches[0], $this->temp_content) ) {
                         return $matches[0];
                     }
 
                     // check if in script
-                    if ( $this->helper->isInsideScriptTag($matches[0][0], $this->temp_content) ) {
+                    if ( $this->helper->isInsideScriptTag($matches[0], $this->temp_content) ) {
                         return $matches[0];
                     }
 
