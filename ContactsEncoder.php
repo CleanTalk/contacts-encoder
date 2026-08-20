@@ -83,12 +83,6 @@ class ContactsEncoder
     protected $plain_email_pattern;
 
     /**
-     * @var string example: '/\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}/'
-     * @ToDo Is this regular expression needed? A little different against `$plain_email_pattern`.
-     */
-    protected $plain_email_pattern_without_capturing;
-
-    /**
      * @var string example: '/tel:(\+\d{8,12})/'
      * @ToDo Is this regexp is actual and right?
      */
@@ -223,7 +217,6 @@ class ContactsEncoder
         $this->global_phones_pattern = '/' . implode('|', self::PHONE_NUMBERS_PATTERNS) . '/';
         $this->global_mailto_pattern = '/mailto\:(' . self::EMAIL_PATTERN . ')/';
         $this->plain_email_pattern = '/(\b' . self::EMAIL_PATTERN . '\b)/';
-        $this->plain_email_pattern_without_capturing = '/\b' . self::EMAIL_PATTERN . '/';
         $this->global_tel_pattern = '/tel:(' . self::PHONE_NUMBER . ')/';
     }
 
@@ -300,83 +293,41 @@ class ContactsEncoder
      */
     public function modifyGlobalEmails($content)
     {
-        $replacing_result = '';
+        $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) {
+            if ( isset($matches[3]) && in_array(strtolower($matches[3]), ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']) && isset($matches[0]) ) {
+                return $matches[0];
+            }
 
-        if ( version_compare(phpversion(), '7.4.0', '>=') ) {
-            $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) use ($content) {
-                if ( isset($matches[3][0], $matches[0][0]) && in_array(strtolower($matches[3][0]), ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']) ) {
-                    return $matches[0][0];
-                }
+            //chek if email is placed in excluded attributes and return unchanged if so
+            if ( isset($matches[0]) && $this->helper->hasAttributeExclusions($matches[0], $this->temp_content) ) {
+                return $matches[0];
+            }
 
-                //chek if email is placed in excluded attributes and return unchanged if so
-                if ( isset($matches[0][0]) && $this->helper->hasAttributeExclusions($matches[0][0], $this->temp_content) ) {
-                    return $matches[0][0];
-                }
+            // skip encoding if the content in script tag
+            if ( isset($matches[0]) && $this->helper->isInsideScriptTag($matches[0], $this->temp_content) ) {
+                return $matches[0];
+            }
 
-                // skip encoding if the content in script tag
-                if ( isset($matches[0][0]) && $this->helper->isInsideScriptTag($matches[0][0], $content) ) {
-                    return $matches[0][0];
-                }
+            if ( isset($matches[0]) && $this->helper->isInsideOptionTag($matches[0], $this->temp_content) ) {
+                return $matches[0];
+            }
 
-                // skip encoding inside select option values/text — breaks form submission
-                if ( isset($matches[0][0]) && $this->helper->isInsideOptionTag($matches[0][0], $content) ) {
-                    return $matches[0][0];
-                }
-
-                if ( isset($matches[0][0]) && $this->helper->isMailto($matches[0][0]) ) {
-                    return $this->encodeMailtoLinkV2($matches[0], $content);
-                }
-
-                if (
-                    isset($matches[0]) &&
-                    is_array($matches[0]) &&
-                    $this->helper->isMailtoAdditionalCopy($matches[0], $content)
-                ) {
-                    return '';
-                }
-
-                if (
-                    isset($matches[0], $matches[0][0]) &&
-                    is_array($matches[0]) &&
-                    $this->helper->isEmailInLink($matches[0], $content)
-                ) {
-                    return $matches[0][0];
-                }
-
-                if ( isset($matches[0][0]) ) {
-                    return $this->encodePlainEmail($matches[0][0]);
-                }
-
+            if (
+                isset($matches[0]) && $this->helper->isMailtoAdditionalCopy($matches[0], $this->temp_content)
+            ) {
                 return '';
-            }, $content, -1, $count, PREG_OFFSET_CAPTURE);
-        }
+            }
 
-        if ( version_compare(phpversion(), '7.4.0', '<') ) {
-            $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) {
-                if ( isset($matches[3]) && in_array(strtolower($matches[3]), ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']) && isset($matches[0]) ) {
-                    return $matches[0];
-                }
+            if ( isset($matches[0]) &&  $this->helper->isMailto($matches[0]) ) {
+                return $this->encodeMailtoLink($matches[0]);
+            }
 
-                //chek if email is placed in excluded attributes and return unchanged if so
-                if ( isset($matches[0]) && $this->helper->hasAttributeExclusions($matches[0], $this->temp_content) ) {
-                    return $matches[0];
-                }
+            if ( isset($matches[0]) ) {
+                return $this->encodePlainEmail($matches[0]);
+            }
 
-                if ( isset($matches[0]) && $this->helper->isInsideOptionTag($matches[0], $this->temp_content) ) {
-                    return $matches[0];
-                }
-
-                if ( isset($matches[0]) &&  $this->helper->isMailto($matches[0]) ) {
-                    return $this->encodeMailtoLink($matches[0]);
-                }
-
-                if ( isset($matches[0]) ) {
-                    return $this->encodePlainEmail($matches[0]);
-                }
-
-                return '';
-            }, $content);
-        }
+            return '';
+        }, $content);
 
         // modify content to turn back aria-label
         $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
@@ -395,89 +346,44 @@ class ContactsEncoder
     public function modifyGlobalPhoneNumbers($content)
     {
         $phones_pattern = $this->global_phones_pattern;
-        $replacing_result = '';
-
-        if ( version_compare(phpversion(), '7.4.0', '>=') ) {
-            $replacing_result = preg_replace_callback(
-                $phones_pattern,
-                function ($matches) use ($content) {
-                    if ( isset($matches[0]) ) {
-                        $first_group = $matches[0];
-                    } else {
-                        return '';
+        $replacing_result = preg_replace_callback(
+            $phones_pattern,
+            function ($matches) {
+                if ( isset($matches[0]) ) {
+                    if ( $this->helper->isTelTag($matches[0]) ) {
+                        return $this->encodeTelLink($matches[0]);
                     }
 
-                    if ( isset($first_group[0]) ) {
-                        $second_group = $first_group[0];
-                    } else {
-                        return '';
-                    }
+                    // symbols clearance
+                    $item_length = strlen(str_replace([' ', '(', ')', '-', '+', '.'], '', $matches[0]));
 
-                    if (is_array($first_group) && $this->helper->isTelTag($second_group) ) {
-                        return $this->encodeTelLinkV2($first_group, $content);
-                    }
-                    //symbols clearance
-                    $item_length = strlen(str_replace([' ', '(', ')', '-', '+', '.'], '', $second_group));
-                    //check length
+                    // check length
                     if ( $item_length > 12 || $item_length < 8 ) {
-                        return $second_group;
+                        return $matches[0];
                     }
-                    //check attribute exclusions
-                    if ( $this->helper->hasAttributeExclusions($second_group, $this->temp_content) ) {
-                        return $second_group;
+
+                    // check attribute exclusions
+                    if ( $this->helper->hasAttributeExclusions($matches[0], $this->temp_content) ) {
+                        return $matches[0];
                     }
-                    //check if in script
-                    if ( $this->helper->isInsideScriptTag($second_group, $content) ) {
-                        return $second_group;
+
+                    // check if in script
+                    if ( $this->helper->isInsideScriptTag($matches[0], $this->temp_content) ) {
+                        return $matches[0];
                     }
-                    //do encode
+
                     return $this->encodeAny(
-                        $second_group,
+                        $matches[0],
                         $this->global_obfuscation_mode,
                         $this->global_replacing_text,
                         true
                     );
-                },
-                $content,
-                -1,
-                $count,
-                PREG_OFFSET_CAPTURE
-            );
-        }
+                }
 
-        if ( version_compare(phpversion(), '7.4.0', '<') ) {
-            $replacing_result = preg_replace_callback(
-                $phones_pattern,
-                function ($matches) {
-                    if ( isset($matches[0]) ) {
-                        if ( $this->helper->isTelTag($matches[0]) ) {
-                            return $this->encodeTelLink($matches[0]);
-                        }
-
-                        $item_length = strlen(str_replace([' ', '(', ')', '-', '+', '.'], '', $matches[0]));
-                        if ( $item_length > 12 || $item_length < 8 ) {
-                            return $matches[0];
-                        }
-
-                        if ( $this->helper->hasAttributeExclusions($matches[0][0], $this->temp_content) ) {
-                            return $matches[0];
-                        }
-                    }
-
-                    if ( isset($matches[0]) ) {
-                        return $this->encodeAny(
-                            $matches[0],
-                            $this->global_obfuscation_mode,
-                            $this->global_replacing_text,
-                            true
-                        );
-                    }
-
-                    return '';
-                },
-                $content
-            );
-        }
+                return '';
+            },
+            $content
+        );
 
         // modify content to turn back aria-label
         $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
@@ -550,7 +456,7 @@ class ContactsEncoder
     }
 
     /**
-     * Method to process mailto: links. For PHP < 7.4
+     * Method to process mailto: links.
      *
      * @param string $mailto_link_str
      *
@@ -576,40 +482,7 @@ class ContactsEncoder
     }
 
     /**
-     * Method to process mailto: links. Use this only for PHP 7.4+
-     *
-     * @param $match array
-     * @param $content string
-     *
-     * @return string
-     */
-    private function encodeMailtoLinkV2($match, $content)
-    {
-        $position = $match[1];
-        $q_position = $position + strcspn($content, '\'"', $position);
-        $mailto_link_str = substr($content, $position, $q_position - $position);
-        // Get inner tag text and place it in $matches[1]
-        preg_match($this->global_mailto_pattern, $mailto_link_str, $matches);
-        if ( isset($matches[1]) ) {
-            $mailto_inner_text = preg_replace_callback($this->plain_email_pattern_without_capturing, function ($matches) {
-                if ( isset($matches[0]) ) {
-                    return $this->getObfuscatedEmailString($matches[0]);
-                }
-
-                return '';
-            }, $matches[1]);
-        }
-
-        $mailto_link_str = str_replace('mailto:', '', $mailto_link_str);
-        $encoded = $this->encoder->encodeString($mailto_link_str);
-
-        $text = isset($mailto_inner_text) ? $mailto_inner_text : $mailto_link_str;
-
-        return 'mailto:' . $text . '" data-original-string="' . $encoded . '" title="' . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8');
-    }
-
-    /**
-     * Method to process tel: links. For PHP < 7.4
+     * Method to process tel: links.
      *
      * @param string $tel_link_str
      *
@@ -631,42 +504,6 @@ class ContactsEncoder
         $encoded      = $this->encoder->encodeString($tel_link_str);
 
         $text = isset($mailto_inner_text) ? $mailto_inner_text : $tel_link_str;
-
-        return 'tel:' . $text . '" data-original-string="' . $encoded . '" title="' . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8');
-    }
-
-    /**
-     * Method to process tel: links. Use this only for PHP 7.4+
-     *
-     * @param array $match
-     * @param string $content
-     *
-     * @return string
-     */
-    private function encodeTelLinkV2($match, $content)
-    {
-        $position = !empty($match[1]) ? (int)$match[1] : null;
-        if (null === $position) {
-            return $content;
-        }
-        $q_position = $position + strcspn($content, '\'"', $position);
-        $tel_link_string = substr($content, $position, $q_position - $position);
-        // Get inner tag text and place it in $matches[1]
-        preg_match($this->global_tel_pattern, $tel_link_string, $matches);
-        if ( isset($matches[1]) ) {
-            $tel_inner_text = preg_replace_callback('/' . self::PHONE_NUMBER . '/', function ($matches) {
-                if ( isset($matches[0]) ) {
-                    $obfuscator = new Obfuscator();
-                    return $obfuscator->processPhone($matches[0]);
-                }
-                return '';
-            }, $matches[1]);
-        }
-
-        $tel_link_string = str_replace('tel:', '', $tel_link_string);
-        $encoded = $this->encoder->encodeString($tel_link_string);
-
-        $text = isset($tel_inner_text) ? $tel_inner_text : $tel_link_string;
 
         return 'tel:' . $text . '" data-original-string="' . $encoded . '" title="' . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8');
     }

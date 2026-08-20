@@ -46,16 +46,16 @@ class ContactsEncoderHelper
     /**
      * Checking if the string contains mailto: link
      *
-     * @param array $match
+     * @param string $email
      * @param string $content
      *
      * @return bool
      */
-    public function isMailtoAdditionalCopy($match, $content)
+    public function isMailtoAdditionalCopy($email, $content)
     {
-        $position = isset($match[1]) ? (int)$match[1] : null;
+        $position = strpos($content, $email);
 
-        if (null === $position) {
+        if ($position === false) {
             return false;
         }
 
@@ -70,32 +70,6 @@ class ContactsEncoderHelper
         }
 
         return false;
-    }
-
-    /**
-     * Checking if email in link
-     *
-     * @param array $matches
-     * @param string $content
-     *
-     * @return bool
-     */
-    public function isEmailInLink($matches, $content)
-    {
-        $email = isset($matches[0]) && is_string($matches[0]) ? $matches[0] : null;
-        $position = isset($matches[1]) ? (int)$matches[1] : null;
-
-        if (null === $position || null === $email) {
-            return false;
-        }
-
-        $href_position = strrpos(substr($content, 0, $position), 'href=');
-
-        if ( $href_position !== false && $href_position + 6 == $position ) {
-            return true;
-        }
-
-        return strpos($email, 'mailto:') !== false;
     }
 
     /**
