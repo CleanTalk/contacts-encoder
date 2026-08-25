@@ -55,7 +55,7 @@ class TestContactsEncoderAriaLabel extends TestCase
         $result = $this->createEncoder()->modifyContent($payload);
 
         $this->assertStringContainsString('ct_temp_aria_0', $result);
-        $this->assertNotRegExp('/>aria-label=/', $result);
+        $this->assertNotRegExp('/>\s*aria-label\s*=/', $result);
     }
 
     public function testModifyContentWordfenceAriaLabelXssPayloadDoesNotBreakOut()
@@ -68,6 +68,6 @@ class TestContactsEncoderAriaLabel extends TestCase
         $result = $this->createEncoder()->modifyContent($payload);
 
         $this->assertTrue(strpos($result, 'ct_temp_aria_0') !== false);
-        $this->assertFalse((bool) preg_match('/>aria-label=/', $result));
+        $this->assertFalse((bool) preg_match('/>\s*aria-label\s*=/', $result));
     }
 }
