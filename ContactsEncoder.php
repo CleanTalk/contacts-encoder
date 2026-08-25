@@ -948,8 +948,9 @@ abstract class ContactsEncoder
             return null;
         }
 
-        $bytes = openssl_random_pseudo_bytes(16);
-        if ( is_string($bytes) && strlen($bytes) === 16 ) {
+        $crypto_strong = false;
+        $bytes = openssl_random_pseudo_bytes(16, $crypto_strong);
+        if ( $crypto_strong && is_string($bytes) && strlen($bytes) === 16 ) {
             return '%%APBCT_ARIA_' . bin2hex($bytes) . '%%';
         }
 
