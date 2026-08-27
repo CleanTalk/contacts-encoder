@@ -110,6 +110,17 @@ class TestContactsEncoderAttributeExclusions extends TestCase
         $this->assertTrue($helper->hasAttributeExclusions($mask, $content));
     }
 
+    public function testHasAttributeExclusionsIgnoresPlainTextAttributeAssignment()
+    {
+        $helper = new ContactsEncoderHelper();
+        $helper->addAttributeNames(array('data-phone-format'));
+
+        $mask = '(999) 321-1233';
+        $content = 'Set data-phone-format="' . $mask . '" in the docs';
+
+        $this->assertFalse($helper->hasAttributeExclusions($mask, $content));
+    }
+
     protected function tearDown(): void
     {
         $this->createEncoder(false)->dropInstance();
