@@ -88,6 +88,28 @@ class TestContactsEncoderAttributeExclusions extends TestCase
         $this->assertStringContainsString('placeholder="' . $mask . '"', $result);
     }
 
+    public function testHasAttributeExclusionsHonorsAddAttributeNames()
+    {
+        $helper = new ContactsEncoderHelper();
+        $helper->addAttributeNames(array('data-phone-format'));
+
+        $mask = '(999) 321-1233';
+        $content = '<span data-phone-format="' . $mask . '"></span>';
+
+        $this->assertTrue($helper->hasAttributeExclusions($mask, $content));
+    }
+
+    public function testHasAttributeExclusionsHonorsAddAttributeExclusions()
+    {
+        $helper = new ContactsEncoderHelper();
+        $helper->addAttributeExclusions('span', array('data-phone-mask'));
+
+        $mask = '(999) 321-1233';
+        $content = '<span data-phone-mask="' . $mask . '"></span>';
+
+        $this->assertTrue($helper->hasAttributeExclusions($mask, $content));
+    }
+
     protected function tearDown(): void
     {
         $this->createEncoder(false)->dropInstance();
