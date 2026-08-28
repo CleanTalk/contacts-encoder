@@ -1,5 +1,7 @@
 # Contact Encoder - email obfuscation that protects email and phone from bots
 
+Contact Encoder is an email obfuscation library that hides email addresses and phone numbers from spam bots and scrapers while keeping them readable for real visitors. Unlike plain JavaScript obfuscation that only stops simple bots, it verifies each visitor against the CleanTalk anti-spam cloud before decoding, so smart bots are filtered too. Works with any framework or plain HTML.
+
 ## Overview
 
 The Contacts Encoder protects email addresses and phone numbers from spam bots. It requires **4 essential components** to work properly:
