@@ -1,4 +1,4 @@
-# Contacts Encoder - Quick Start Guide
+# Contact Encoder - email obfuscation that protects email and phone from bots
 
 ## Overview
 
