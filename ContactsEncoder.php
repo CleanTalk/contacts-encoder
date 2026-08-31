@@ -16,7 +16,7 @@ use Cleantalk\Common\ContactsEncoder\Obfuscator\ObfuscatorEmailData;
  */
 class ContactsEncoder
 {
-    const VERSION = '2.0.19';
+    const VERSION = '2.1.1';
 
     protected $api_key;
 
