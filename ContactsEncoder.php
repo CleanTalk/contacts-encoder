@@ -293,6 +293,8 @@ class ContactsEncoder
             $content = $this->handleAriaLabelContent($content);
         }
 
+        $this->temp_content = $content;
+
         $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) {
             if ( isset($matches[3]) && in_array(strtolower($matches[3]), ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']) && isset($matches[0]) ) {
                 return $matches[0];
@@ -350,6 +352,8 @@ class ContactsEncoder
         if ( $owns_aria_protection ) {
             $content = $this->handleAriaLabelContent($content);
         }
+
+        $this->temp_content = $content;
 
         $phones_pattern = $this->global_phones_pattern;
         $replacing_result = preg_replace_callback(

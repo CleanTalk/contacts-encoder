@@ -95,6 +95,32 @@ class TestContactsEncoderAriaLabel extends TestCase
         $this->assertFalse((bool) preg_match('/>\s*aria-label\s*=/', $result));
     }
 
+    public function testModifyGlobalEmailsDirectCallDoesNotCrashOnHelperChecks()
+    {
+        $script_email = 'script@example.com';
+        $visible_email = 'info@example.com';
+        $content = '<script>var e = "' . $script_email . '";</script> Contact ' . $visible_email;
+
+        $result = $this->createEncoder()->modifyGlobalEmails($content);
+
+        $this->assertStringContainsString('var e = "' . $script_email . '"', $result);
+        $this->assertStringNotContainsString('Contact ' . $visible_email, $result);
+        $this->assertStringContainsString('apbct-email-encoder', $result);
+    }
+
+    public function testModifyGlobalPhoneNumbersDirectCallDoesNotCrashOnHelperChecks()
+    {
+        $script_phone = '(800) 555-1234';
+        $visible_phone = '(800) 555-9999';
+        $content = '<script>var p = "' . $script_phone . '";</script> Call ' . $visible_phone;
+
+        $result = $this->createEncoder(false, true)->modifyGlobalPhoneNumbers($content);
+
+        $this->assertStringContainsString('var p = "' . $script_phone . '"', $result);
+        $this->assertStringNotContainsString('Call ' . $visible_phone, $result);
+        $this->assertStringContainsString('apbct-email-encoder', $result);
+    }
+
     protected function tearDown(): void
     {
         $this->createEncoder(false, false)->dropInstance();
