@@ -867,11 +867,15 @@ class ContactsEncoder
      */
     private function getSecureRandomBytes($length)
     {
+        if ( !is_int($length) || $length < 1 ) {
+            return null;
+        }
+
         if ( function_exists('random_bytes') ) {
             try {
                 // phpcs:ignore PHPCompatibility.FunctionUse.NewFunctions.random_bytesFound
                 $bytes = random_bytes($length);
-                if ( is_string($bytes) && strlen($bytes) === $length ) {
+                if ( strlen($bytes) === $length ) {
                     return $bytes;
                 }
             } catch ( \Exception $e ) {
