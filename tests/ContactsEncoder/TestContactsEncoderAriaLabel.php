@@ -7,9 +7,11 @@ use PHPUnit\Framework\TestCase;
 class TestContactsEncoderAriaLabel extends TestCase
 {
     /**
+     * @param bool $do_encode_emails
+     * @param bool $do_encode_phones
      * @return ContactsEncoder
      */
-    private function createEncoder()
+    private function createEncoder($do_encode_emails = true, $do_encode_phones = false)
     {
         $concrete = new class () extends ContactsEncoder {
             protected function checkRequest()
@@ -27,9 +29,12 @@ class TestContactsEncoderAriaLabel extends TestCase
         $params->api_key = 'test_api_key';
         $params->obfuscation_mode = Params::OBFUSCATION_MODE_BLUR;
         $params->obfuscation_text = '';
-        $params->do_encode_emails = true;
-        $params->do_encode_phones = false;
+        $params->do_encode_emails = $do_encode_emails;
+        $params->do_encode_phones = $do_encode_phones;
         $params->is_logged_in = false;
+
+        $encoder = $concrete::getInstance($params);
+        $encoder->dropInstance();
 
         return $concrete::getInstance($params);
     }
@@ -46,6 +51,25 @@ class TestContactsEncoderAriaLabel extends TestCase
         $this->assertStringNotContainsString('ct_temp_aria_', $result);
     }
 
+    public function testModifyContentPreservesAriaLabelWhenEmailAndPhoneEncodingEnabled()
+    {
+        $email = 'info@example.com';
+        $phone = '(800) 555-1234';
+        $content = '<button aria-label="Call ' . $phone . ' or email ' . $email . '">Click</button>'
+            . ' Visible ' . $phone . ' and ' . $email;
+
+        $result = $this->createEncoder(true, true)->modifyContent($content);
+
+        $this->assertStringContainsString(
+            'aria-label="Call ' . $phone . ' or email ' . $email . '"',
+            $result
+        );
+        $this->assertStringNotContainsString('%%APBCT_ARIA_', $result);
+        $this->assertStringNotContainsString('Visible ' . $phone, $result);
+        $this->assertStringNotContainsString('Visible ' . $email, $result);
+        $this->assertStringContainsString('apbct-email-encoder', $result);
+    }
+
     public function testModifyContentDoesNotRestorePlantedCtTempAriaToken()
     {
         $payload = '<blockquote cite=" aria-label=" > <a title="test">test</a></blockquote>'
@@ -54,8 +78,8 @@ class TestContactsEncoderAriaLabel extends TestCase
 
         $result = $this->createEncoder()->modifyContent($payload);
 
-        $this->assertStringContainsString('ct_temp_aria_0', $result);
-        $this->assertNotRegExp('/>\s*aria-label\s*=/', $result);
+        $this->assertTrue(strpos($result, 'ct_temp_aria_0') !== false);
+        $this->assertFalse((bool) preg_match('/>\s*aria-label\s*=/', $result));
     }
 
     public function testModifyContentWordfenceAriaLabelXssPayloadDoesNotBreakOut()
@@ -69,5 +93,10 @@ class TestContactsEncoderAriaLabel extends TestCase
 
         $this->assertTrue(strpos($result, 'ct_temp_aria_0') !== false);
         $this->assertFalse((bool) preg_match('/>\s*aria-label\s*=/', $result));
+    }
+
+    protected function tearDown(): void
+    {
+        $this->createEncoder(false, false)->dropInstance();
     }
 }

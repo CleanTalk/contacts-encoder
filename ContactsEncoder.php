@@ -273,6 +273,10 @@ class ContactsEncoder
 
         $this->do_encode_phones && $content = $this->modifyGlobalPhoneNumbers($content);
 
+        if ( $this->do_encode_emails || $this->do_encode_phones ) {
+            $content = $this->handleAriaLabelContent($content, true);
+        }
+
         return $content;
     }
 
@@ -284,6 +288,11 @@ class ContactsEncoder
      */
     public function modifyGlobalEmails($content)
     {
+        $owns_aria_protection = empty($this->aria_placeholders);
+        if ( $owns_aria_protection ) {
+            $content = $this->handleAriaLabelContent($content);
+        }
+
         $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) {
             if ( isset($matches[3]) && in_array(strtolower($matches[3]), ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']) && isset($matches[0]) ) {
                 return $matches[0];
@@ -320,8 +329,9 @@ class ContactsEncoder
             return '';
         }, $content);
 
-        // modify content to turn back aria-label
-        $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
+        if ( $owns_aria_protection ) {
+            $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
+        }
 
         //please keep this var (do not simplify the code) for further debug
         return $replacing_result;
@@ -336,6 +346,11 @@ class ContactsEncoder
      */
     public function modifyGlobalPhoneNumbers($content)
     {
+        $owns_aria_protection = empty($this->aria_placeholders);
+        if ( $owns_aria_protection ) {
+            $content = $this->handleAriaLabelContent($content);
+        }
+
         $phones_pattern = $this->global_phones_pattern;
         $replacing_result = preg_replace_callback(
             $phones_pattern,
@@ -376,8 +391,9 @@ class ContactsEncoder
             $content
         );
 
-        // modify content to turn back aria-label
-        $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
+        if ( $owns_aria_protection ) {
+            $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
+        }
 
         //please keep this var (do not simplify the code) for further debug
         return $replacing_result;
