@@ -13,6 +13,7 @@ class ContactsEncoderHelper
      */
     private $attribute_exclusions_signs = array(
         'input' => array('placeholder', 'value', 'data-mask'),
+        'option' => array('value'),
         'sc-customer-email' => array('placeholder', 'value'),
         'img' => array('alt', 'title'),
         'div' => array('data-et-multi-view'),
@@ -247,7 +248,7 @@ class ContactsEncoderHelper
         $attribute_signs = $this->getWorkingAttributeExclusionsSigns();
 
         foreach ( $attribute_signs as $tag => $array_of_attributes ) {
-            if ( ! is_array($array_of_attributes) ) {
+            if ( ! is_string($tag) || $tag === '' || ! is_array($array_of_attributes) ) {
                 continue;
             }
             foreach ( $array_of_attributes as $attribute ) {

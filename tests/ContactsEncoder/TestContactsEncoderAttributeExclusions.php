@@ -56,6 +56,29 @@ class TestContactsEncoderAttributeExclusions extends TestCase
         $this->assertTrue($helper->hasAttributeExclusions($email, $content));
     }
 
+    public function testHasAttributeExclusionsForOptionValue()
+    {
+        $helper = new ContactsEncoderHelper();
+        $email = 'user@example.com';
+        $content = '<option value="' . $email . '">User</option>';
+
+        $this->assertTrue($helper->hasAttributeExclusions($email, $content));
+    }
+
+    public function testHasAttributeExclusionsIgnoresNonStringTagKeys()
+    {
+        $helper = new ContactsEncoderHelper();
+        $helper->setAttributeExclusionsMap(array(
+            123 => array('value'),
+            'option' => array('value'),
+        ));
+
+        $email = 'user@example.com';
+        $content = '<option value="' . $email . '">User</option>';
+
+        $this->assertTrue($helper->hasAttributeExclusions($email, $content));
+    }
+
     public function testHasAttributeExclusionsReturnsFalseForPlainPhone()
     {
         $helper = new ContactsEncoderHelper();

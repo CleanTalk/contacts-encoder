@@ -884,8 +884,9 @@ class ContactsEncoder
         }
 
         if ( function_exists('openssl_random_pseudo_bytes') ) {
-            $bytes = openssl_random_pseudo_bytes($length);
-            if ( is_string($bytes) && strlen($bytes) === $length ) {
+            $crypto_strong = false;
+            $bytes = openssl_random_pseudo_bytes($length, $crypto_strong);
+            if ( $crypto_strong && is_string($bytes) && strlen($bytes) === $length ) {
                 return $bytes;
             }
         }
