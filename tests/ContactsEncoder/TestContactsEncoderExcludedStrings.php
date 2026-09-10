@@ -42,9 +42,9 @@ class TestContactsEncoderExcludedStrings extends TestCase
         return $concrete::getInstance($params);
     }
 
-    public function testParseExcludedStringsSplitsLinesAndCommas()
+    public function testParseExcludedStringsSplitsLines()
     {
-        $parsed = ExclusionsService::parseExcludedStrings("keep@example.com\n+1 800 555-1234, example.com\n");
+        $parsed = ExclusionsService::parseExcludedStrings("keep@example.com\n+1 800 555-1234\nexample.com\n");
 
         $this->assertSame(
             array('keep@example.com', '+1 800 555-1234', 'example.com'),
@@ -52,10 +52,22 @@ class TestContactsEncoderExcludedStrings extends TestCase
         );
     }
 
+    public function testParseExcludedStringsKeepsCommaInsideALine()
+    {
+        $parsed = ExclusionsService::parseExcludedStrings(
+            "keep@example.com, office@example.com\n+1 800 555-1234"
+        );
+
+        $this->assertSame(
+            array('keep@example.com, office@example.com', '+1 800 555-1234'),
+            $parsed
+        );
+    }
+
     public function testParseExcludedStringsIgnoresEmptyInput()
     {
         $this->assertSame(array(), ExclusionsService::parseExcludedStrings(''));
-        $this->assertSame(array(), ExclusionsService::parseExcludedStrings(" \n , \r\n "));
+        $this->assertSame(array(), ExclusionsService::parseExcludedStrings(" \n \r\n "));
     }
 
     public function testModifyGlobalEmailsKeepsExcludedAddress()
