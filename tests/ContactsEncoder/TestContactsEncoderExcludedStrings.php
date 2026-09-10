@@ -64,6 +64,19 @@ class TestContactsEncoderExcludedStrings extends TestCase
         );
     }
 
+    public function testIsContactExcludedDoesNotCrossMatchEmailAndPhoneDigits()
+    {
+        $params = new Params();
+        $params->api_key = 'test_api_key';
+        $params->excluded_strings = array('+1 800 555-1234', 'user12345678@example.com');
+        $service = new ExclusionsService($params);
+
+        $this->assertFalse($service->isContactExcluded('ticket18005551234@shop.com'));
+        $this->assertFalse($service->isContactExcluded('123-456-7890'));
+        $this->assertTrue($service->isContactExcluded('(800) 555-1234'));
+        $this->assertTrue($service->isContactExcluded('user12345678@example.com'));
+    }
+
     public function testParseExcludedStringsIgnoresEmptyInput()
     {
         $this->assertSame(array(), ExclusionsService::parseExcludedStrings(''));
