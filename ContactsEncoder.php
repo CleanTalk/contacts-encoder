@@ -331,6 +331,8 @@ class ContactsEncoder
 
             // mailto: links are encoded in place inside the href attribute, so they bypass the markup guards.
             if ( $this->helper->isMailto($matches[0]) ) {
+                $position = $position === false ? 0 : $position;
+
                 return $this->encodeMailtoLink($matches[0], $position);
             }
 
@@ -395,6 +397,8 @@ class ContactsEncoder
 
                 // tel: links are encoded in place inside the href attribute, so they bypass the markup guards.
                 if ( $this->helper->isTelTag($matches[0]) ) {
+                    $position = $position === false ? 0 : $position;
+
                     return $this->encodeTelLink($matches[0], $position);
                 }
 

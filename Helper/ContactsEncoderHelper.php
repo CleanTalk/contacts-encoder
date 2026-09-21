@@ -216,6 +216,7 @@ class ContactsEncoderHelper
      * @param string $content The full content
      * @param int|false|null $position Known match offset; null looks up the first occurrence
      * @return bool
+     * @psalm-suppress PossiblyUnusedMethod
      */
     public function isInsideScriptTag($email, $content, $position = null)
     {
@@ -242,11 +243,13 @@ class ContactsEncoderHelper
         $this->indexMarkup($content);
 
         $index = $this->findRangeIndex($this->raw_text_ranges, $pos);
-        if ( $index === false ) {
+        if ( $index === false || ! isset($this->raw_text_ranges[$index][2]) ) {
             return false;
         }
 
-        return $tags === null || in_array($this->raw_text_ranges[$index][2], $tags, true);
+        $range_tag = $this->raw_text_ranges[$index][2];
+
+        return $tags === null || in_array($range_tag, $tags, true);
     }
 
     /**
@@ -318,11 +321,19 @@ class ContactsEncoderHelper
      */
     private function findRangeIndex($ranges, $position)
     {
+        if ( ! is_array($ranges) || empty($ranges) ) {
+            return false;
+        }
+
         $low = 0;
         $high = count($ranges) - 1;
 
         while ( $low <= $high ) {
             $middle = intdiv($low + $high, 2);
+            if ( ! isset($ranges[$middle][0], $ranges[$middle][1]) ) {
+                return false;
+            }
+
             if ( $position < $ranges[$middle][0] ) {
                 $high = $middle - 1;
             } elseif ( $position >= $ranges[$middle][1] ) {
