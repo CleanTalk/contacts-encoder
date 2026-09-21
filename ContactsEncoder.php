@@ -299,14 +299,17 @@ class ContactsEncoder
         }
 
         $this->temp_content = $content;
+        $this->helper->indexMarkup($this->temp_content);
 
         $match_cursor = 0;
-        $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) use (&$match_cursor) {
+        $match_offsets = $this->collectMatchOffsets($this->global_email_pattern, $content);
+        $match_offset_index = 0;
+        $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) use ($match_offsets, &$match_offset_index, &$match_cursor) {
             if ( ! isset($matches[0]) ) {
                 return '';
             }
 
-            $position = $this->advanceMatchCursor($matches[0], $match_cursor);
+            $position = $this->resolveNextMatchOffset($matches[0], $match_offsets, $match_offset_index, $match_cursor);
 
             if ( $this->exclusions->isContactExcluded($matches[0]) ) {
                 return $matches[0];
@@ -316,26 +319,28 @@ class ContactsEncoder
                 return $matches[0];
             }
 
+            // Raw text of script/style/template blocks is never markup we may rewrite.
+            if ( $this->helper->isInsideRawTextTag($matches[0], $this->temp_content, $position) ) {
+                return $matches[0];
+            }
+
+            // Drop the cc=/bcc= copies before the markup guards take them out of the flow.
+            if ( $this->helper->isMailtoAdditionalCopy($matches[0], $this->temp_content, $position) ) {
+                return '';
+            }
+
+            // mailto: links are encoded in place inside the href attribute, so they bypass the markup guards.
+            if ( $this->helper->isMailto($matches[0]) ) {
+                return $this->encodeMailtoLink($matches[0]);
+            }
+
             //chek if email is placed in excluded attributes and return unchanged if so
             if ( $this->helper->hasAttributeExclusions($matches[0], $this->temp_content, $position) ) {
                 return $matches[0];
             }
 
-            // skip encoding if the content in script tag
-            if ( $this->helper->isInsideScriptTag($matches[0], $this->temp_content, $position) ) {
-                return $matches[0];
-            }
-
             if ( $this->helper->isInsideOptionTag($matches[0], $this->temp_content, $position) ) {
                 return $matches[0];
-            }
-
-            if ( $this->helper->isMailtoAdditionalCopy($matches[0], $this->temp_content, $position) ) {
-                return '';
-            }
-
-            if ( $this->helper->isMailto($matches[0]) ) {
-                return $this->encodeMailtoLink($matches[0]);
             }
 
             return $this->encodePlainEmail($matches[0]);
@@ -364,22 +369,31 @@ class ContactsEncoder
         }
 
         $this->temp_content = $content;
+        $this->helper->indexMarkup($this->temp_content);
 
         $phones_pattern = $this->global_phones_pattern;
         $match_cursor = 0;
+        $match_offsets = $this->collectMatchOffsets($phones_pattern, $content);
+        $match_offset_index = 0;
         $replacing_result = preg_replace_callback(
             $phones_pattern,
-            function ($matches) use (&$match_cursor) {
+            function ($matches) use ($match_offsets, &$match_offset_index, &$match_cursor) {
                 if ( ! isset($matches[0]) ) {
                     return '';
                 }
 
-                $position = $this->advanceMatchCursor($matches[0], $match_cursor);
+                $position = $this->resolveNextMatchOffset($matches[0], $match_offsets, $match_offset_index, $match_cursor);
 
                 if ( $this->exclusions->isContactExcluded($matches[0]) ) {
                     return $matches[0];
                 }
 
+                // Raw text of script/style/template blocks is never markup we may rewrite.
+                if ( $this->helper->isInsideRawTextTag($matches[0], $this->temp_content, $position) ) {
+                    return $matches[0];
+                }
+
+                // tel: links are encoded in place inside the href attribute, so they bypass the markup guards.
                 if ( $this->helper->isTelTag($matches[0]) ) {
                     return $this->encodeTelLink($matches[0]);
                 }
@@ -394,11 +408,6 @@ class ContactsEncoder
 
                 // check attribute exclusions
                 if ( $this->helper->hasAttributeExclusions($matches[0], $this->temp_content, $position) ) {
-                    return $matches[0];
-                }
-
-                // check if in script
-                if ( $this->helper->isInsideScriptTag($matches[0], $this->temp_content, $position) ) {
                     return $matches[0];
                 }
 
@@ -421,20 +430,64 @@ class ContactsEncoder
     }
 
     /**
-     * Advance the left-to-right cursor so repeated contacts use their own offset.
+     * Resolve the real offset of the current match.
+     *
+     * The offsets are collected up front with PREG_OFFSET_CAPTURE and consumed in order, because
+     * preg_match_all() and preg_replace_callback() walk the same pattern over the same subject and
+     * therefore produce the same sequence of matches. Looking the match up with strpos() instead
+     * would land on an earlier literal occurrence that the pattern did not match, e.g. the address
+     * inside `<script>var t="user@example.com1";</script>` shadowing a real one further down.
      *
      * @param string $match
+     * @param int[] $offsets
+     * @param int $offset_index
      * @param int $cursor
      * @return int|false
      */
-    private function advanceMatchCursor($match, &$cursor)
+    private function resolveNextMatchOffset($match, $offsets, &$offset_index, &$cursor)
     {
+        $length = strlen($match);
+
+        if ( isset($offsets[$offset_index]) ) {
+            $position = $offsets[$offset_index];
+            $offset_index++;
+
+            if ( substr($this->temp_content, $position, $length) === $match ) {
+                $cursor = $position + $length;
+
+                return $position;
+            }
+        }
+
+        // The pre-collected offsets are unusable, fall back to a left-to-right scan.
         $position = strpos($this->temp_content, $match, $cursor);
         if ( $position !== false ) {
-            $cursor = $position + strlen($match);
+            $cursor = $position + $length;
         }
 
         return $position;
+    }
+
+    /**
+     * Collect the real offset of every match of the pattern in the content.
+     *
+     * @param string $pattern
+     * @param string $content
+     * @return int[]
+     */
+    private function collectMatchOffsets($pattern, $content)
+    {
+        $offsets = array();
+
+        if ( preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE) && isset($matches[0]) ) {
+            foreach ( $matches[0] as $match ) {
+                if ( isset($match[1]) ) {
+                    $offsets[] = $match[1];
+                }
+            }
+        }
+
+        return $offsets;
     }
 
     /*
@@ -823,24 +876,59 @@ class ContactsEncoder
      * Example: <code><a title="example1@mail.com" href="mailto:example2@mail.com">Email</a></code>
      * Will be turned to <code><a href="mailto:example2@mail.com">Email</a></code>
      *
+     * The attribute is dropped wherever the address sits inside its value, so
+     * <code>title="Write to example1@mail.com"</code> is handled as well. Matching is scoped to a
+     * single tag and a single quoted value, otherwise a greedy match would swallow the rest of the
+     * markup along with it.
+     *
      * @param string $content The content to process.
      * @return string The content with attributes removed.
      */
     private static function dropAttributesContainEmail($content, $tags)
     {
-        $attribute_content_chunk = '[\s]{0,}=[\s]{0,}[\"\']\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\..*\b[\"\']';
+        $email_pattern = '/' . self::EMAIL_PATTERN . '/';
+
         foreach ($tags as $tag => $attribute) {
-            // Regular expression to match the attribute without the tag
-            $regexp_chunk_without_tag = "/{$attribute}{$attribute_content_chunk}/";
-            // Regular expression to match the attribute with the tag
-            $regexp_chunk_with_tag = "/<{$tag}.*{$attribute}{$attribute_content_chunk}/";
-            // Find all matches of the attribute with the tag in the content
-            preg_match_all($regexp_chunk_with_tag, $content, $matches);
-            if (!empty($matches[0])) {
-                // Remove the attribute without the tag from the content
-                $content = preg_replace($regexp_chunk_without_tag, '', $content, count($matches[0]));
+            if ( ! is_string($tag) || $tag === '' || ! is_string($attribute) || $attribute === '' ) {
+                continue;
+            }
+
+            // A whole tag, with quoted attribute values consumed as a unit so `>` inside them is kept.
+            $tag_pattern = '/<' . preg_quote($tag, '/') . '\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>/i';
+            // The target attribute inside that tag, value limited to its own quotes.
+            $attribute_pattern = '/\s' . preg_quote($attribute, '/') . '\s*=\s*(["\'])(.*?)\1/is';
+
+            $replaced = preg_replace_callback(
+                $tag_pattern,
+                static function ($tag_match) use ($attribute_pattern, $email_pattern) {
+                    if ( ! isset($tag_match[0]) ) {
+                        return '';
+                    }
+
+                    $stripped = preg_replace_callback(
+                        $attribute_pattern,
+                        static function ($attribute_match) use ($email_pattern) {
+                            if ( ! isset($attribute_match[0], $attribute_match[2]) ) {
+                                return '';
+                            }
+
+                            return preg_match($email_pattern, $attribute_match[2])
+                                ? ''
+                                : $attribute_match[0];
+                        },
+                        $tag_match[0]
+                    );
+
+                    return $stripped === null ? $tag_match[0] : $stripped;
+                },
+                $content
+            );
+
+            if ( $replaced !== null ) {
+                $content = $replaced;
             }
         }
+
         return $content;
     }
 
