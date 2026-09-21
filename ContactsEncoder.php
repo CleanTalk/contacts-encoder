@@ -331,7 +331,7 @@ class ContactsEncoder
 
             // mailto: links are encoded in place inside the href attribute, so they bypass the markup guards.
             if ( $this->helper->isMailto($matches[0]) ) {
-                return $this->encodeMailtoLink($matches[0]);
+                return $this->encodeMailtoLink($matches[0], $position);
             }
 
             //chek if email is placed in excluded attributes and return unchanged if so
@@ -395,7 +395,7 @@ class ContactsEncoder
 
                 // tel: links are encoded in place inside the href attribute, so they bypass the markup guards.
                 if ( $this->helper->isTelTag($matches[0]) ) {
-                    return $this->encodeTelLink($matches[0]);
+                    return $this->encodeTelLink($matches[0], $position);
                 }
 
                 // symbols clearance
@@ -557,10 +557,11 @@ class ContactsEncoder
      * Method to process mailto: links.
      *
      * @param string $mailto_link_str
+     * @param int $position Offset of the match inside the content being processed.
      *
      * @return string
      */
-    private function encodeMailtoLink($mailto_link_str)
+    private function encodeMailtoLink($mailto_link_str, $position = 0)
     {
         // Get inner tag text and place it in $matches[1]
         preg_match($this->global_mailto_pattern, $mailto_link_str, $matches);
@@ -576,17 +577,18 @@ class ContactsEncoder
 
         $text = isset($mailto_inner_text) ? $mailto_inner_text : $mailto_link_str;
 
-        return 'mailto:' . $text . '" data-original-string="' . $encoded . '" title="' . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8');
+        return 'mailto:' . $text . $this->buildSchemeLinkAttributes($encoded, $position);
     }
 
     /**
      * Method to process tel: links.
      *
      * @param string $tel_link_str
+     * @param int $position Offset of the match inside the content being processed.
      *
      * @return string
      */
-    private function encodeTelLink($tel_link_str)
+    private function encodeTelLink($tel_link_str, $position = 0)
     {
         // Get inner tag text and place it in $matches[1]
         preg_match($this->global_tel_pattern, $tel_link_str, $matches);
@@ -603,7 +605,32 @@ class ContactsEncoder
 
         $text = isset($tel_inner_text) ? $tel_inner_text : $tel_link_str;
 
-        return 'tel:' . $text . '" data-original-string="' . $encoded . '" title="' . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8');
+        return 'tel:' . $text . $this->buildSchemeLinkAttributes($encoded, $position);
+    }
+
+    /**
+     * Builds the attribute tail appended to an opening tag when a scheme link is encoded in place.
+     *
+     * The tail intentionally leaves the last attribute value unclosed: the quote that used to close
+     * the original href value closes it instead. The tooltip is skipped when the tag already carries
+     * a title attribute, otherwise the markup would end up with a duplicated attribute and the
+     * author's own title would be wiped by the decoder script.
+     *
+     * @param string $encoded Encoded original string.
+     * @param int $position Offset of the match inside the content being processed.
+     *
+     * @return string
+     */
+    private function buildSchemeLinkAttributes($encoded, $position)
+    {
+        $has_own_title = $this->helper->enclosingTagHasAttribute($this->temp_content, (int)$position, 'title');
+
+        if ( $has_own_title ) {
+            return '" data-original-string="' . $encoded;
+        }
+
+        return '" title="' . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8')
+            . '" data-original-string="' . $encoded;
     }
 
     /**

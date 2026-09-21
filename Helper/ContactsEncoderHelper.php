@@ -50,6 +50,79 @@ class ContactsEncoderHelper
     private $raw_text_ranges = array();
 
     /**
+     * Checks whether the tag enclosing the given offset already declares the attribute.
+     *
+     * Scheme links are rewritten from the inside of the href value, so the encoder appends its own
+     * attributes to the opening tag. This lookup prevents emitting a duplicate of an attribute the
+     * author has already set, e.g. `title` on `<a title="Write to us" href="mailto:...">`.
+     *
+     * @param string $content Whole content being processed.
+     * @param int $position Offset of the match inside $content.
+     * @param string $attribute Attribute name to look for.
+     *
+     * @return bool
+     */
+    public function enclosingTagHasAttribute($content, $position, $attribute)
+    {
+        if ( ! is_string($content) || ! is_int($position) || $position < 0 ) {
+            return false;
+        }
+
+        $tag_start = strrpos(substr($content, 0, $position), '<');
+        if ( $tag_start === false ) {
+            return false;
+        }
+
+        $opening_tag = $this->readOpeningTag($content, $tag_start);
+        if ( $opening_tag === '' ) {
+            return false;
+        }
+
+        return (bool)preg_match('/[\s\'"]' . preg_quote($attribute, '/') . '\s*=/i', $opening_tag);
+    }
+
+    /**
+     * Reads an opening tag starting at the given offset, honouring quoted attribute values so that
+     * a `>` inside a value does not terminate the tag prematurely.
+     *
+     * @param string $content
+     * @param int $tag_start Offset of the `<` character.
+     *
+     * @return string Empty string when the tag is not closed.
+     */
+    private function readOpeningTag($content, $tag_start)
+    {
+        $length = strlen($content);
+        $quote  = null;
+
+        for ( $i = $tag_start + 1; $i < $length; $i++ ) {
+            $char = $content[$i];
+
+            if ( $quote !== null ) {
+                if ( $char === $quote ) {
+                    $quote = null;
+                }
+                continue;
+            }
+
+            if ( $char === '"' || $char === "'" ) {
+                $quote = $char;
+                continue;
+            }
+
+            if ( $char === '>' ) {
+                return substr($content, $tag_start, $i - $tag_start + 1);
+            }
+
+            if ( $char === '<' ) {
+                return '';
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * Checking if the string contains mailto: link
      *
      * @param string $string
