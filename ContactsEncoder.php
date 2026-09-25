@@ -270,7 +270,7 @@ class ContactsEncoder
         // will use this in regexp callback
         $this->temp_content = $content;
 
-        $content = self::dropAttributesContainEmail($content, self::$attributes_to_drop);
+        $content = $this->dropAttributesContainEmail($content, self::$attributes_to_drop);
 
         // Main logic
 
@@ -915,9 +915,10 @@ class ContactsEncoder
      * @param string $content The content to process.
      * @return string The content with attributes removed.
      */
-    private static function dropAttributesContainEmail($content, $tags)
+    private function dropAttributesContainEmail($content, $tags)
     {
         $email_pattern = '/' . self::EMAIL_PATTERN . '/';
+        $this->helper->indexMarkup($content);
 
         foreach ($tags as $tag => $attribute) {
             if ( ! is_string($tag) || $tag === '' || ! is_string($attribute) || $attribute === '' ) {
@@ -931,9 +932,20 @@ class ContactsEncoder
 
             $replaced = preg_replace_callback(
                 $tag_pattern,
-                static function ($tag_match) use ($attribute_pattern, $email_pattern) {
-                    if ( ! isset($tag_match[0]) ) {
+                function ($tag_match) use ($attribute_pattern, $email_pattern, $content) {
+                    if ( ! isset($tag_match[0]) || ! is_array($tag_match[0]) || ! isset($tag_match[0][0], $tag_match[0][1]) ) {
                         return '';
+                    }
+
+                    $opening_tag = $tag_match[0][0];
+                    $tag_offset = $tag_match[0][1];
+
+                    if ( ! is_string($opening_tag) || ! is_int($tag_offset) ) {
+                        return '';
+                    }
+
+                    if ( $this->helper->isInsideRawTextTag($opening_tag, $content, $tag_offset) ) {
+                        return $opening_tag;
                     }
 
                     $stripped = preg_replace_callback(
@@ -947,16 +959,20 @@ class ContactsEncoder
                                 ? ''
                                 : $attribute_match[0];
                         },
-                        $tag_match[0]
+                        $opening_tag
                     );
 
-                    return $stripped === null ? $tag_match[0] : $stripped;
+                    return $stripped === null ? $opening_tag : $stripped;
                 },
-                $content
+                $content,
+                -1,
+                $count,
+                PREG_OFFSET_CAPTURE
             );
 
-            if ( $replaced !== null ) {
+            if ( $replaced !== null && $count > 0 ) {
                 $content = $replaced;
+                $this->helper->indexMarkup($content);
             }
         }
 
