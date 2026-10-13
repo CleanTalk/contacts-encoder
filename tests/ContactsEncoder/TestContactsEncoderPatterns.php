@@ -58,7 +58,7 @@ class ContactsEncoderPatternsTest extends TestCase
     {
         $encoder = $this->createConcreteContactsEncoder($this->getTestParams());
         $pattern = $encoder->getProperty('global_email_pattern');
-        $expected = '/((?i:mailto):\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b)|(\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+(\.[A-Za-z]{2,}\b))/';
+        $expected = '/((?i:mailto):\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b(?:\?(?:[^"\'<>]*?(?=["\'])|[^"\'<>\s]*))?)|(\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+(\.[A-Za-z]{2,}\b))/';
         $this->assertEquals($expected, $pattern);
     }
 
@@ -74,7 +74,7 @@ class ContactsEncoderPatternsTest extends TestCase
     {
         $encoder = $this->createConcreteContactsEncoder($this->getTestParams());
         $pattern = $encoder->getProperty('global_mailto_pattern');
-        $expected = '/(?i:mailto):([_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b)/';
+        $expected = '/(?i:mailto):([_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b)(?:\?(?:[^"\'<>]*?(?=["\'])|[^"\'<>\s]*))?/';
         $this->assertEquals($expected, $pattern);
     }
 
