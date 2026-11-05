@@ -46,19 +46,11 @@ class ContactsEncoderPatternsTest extends TestCase
         return $params;
     }
 
-    public function testAriaRegexProperty()
-    {
-
-        $encoder = $this->createConcreteContactsEncoder($this->getTestParams());
-        $ariaRegex = $encoder->getProperty('aria_regex');
-        $this->assertEquals('/aria-label\s*=\s*(["\'])(?:(?!\1).)*\1/', $ariaRegex);
-    }
-
     public function testGlobalEmailPatternProperty()
     {
         $encoder = $this->createConcreteContactsEncoder($this->getTestParams());
         $pattern = $encoder->getProperty('global_email_pattern');
-        $expected = '/((?i:mailto):\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b(?:\?(?:[^"\'<>]*?(?=["\'])|[^"\'<>\s]*))?)|(\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+(\.[A-Za-z]{2,}\b))/';
+        $expected = '/((?i:mailto):\b[_A-Za-z0-9-\.]{1,64}@[_A-Za-z0-9-\.]{1,255}\.[A-Za-z]{2,63}\b(?:\?(?:[^"\'<>]{0,2048}?(?=["\'])|[^"\'<>\s]{0,2048}))?)|(\b[_A-Za-z0-9-\.]{1,64}@[_A-Za-z0-9-\.]{1,255}(\.[A-Za-z]{2,63}\b))/';
         $this->assertEquals($expected, $pattern);
     }
 
@@ -74,7 +66,7 @@ class ContactsEncoderPatternsTest extends TestCase
     {
         $encoder = $this->createConcreteContactsEncoder($this->getTestParams());
         $pattern = $encoder->getProperty('global_mailto_pattern');
-        $expected = '/(?i:mailto):([_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b)(?:\?(?:[^"\'<>]*?(?=["\'])|[^"\'<>\s]*))?/';
+        $expected = '/(?i:mailto):([_A-Za-z0-9-\.]{1,64}@[_A-Za-z0-9-\.]{1,255}\.[A-Za-z]{2,63}\b)(?:\?(?:[^"\'<>]{0,2048}?(?=["\'])|[^"\'<>\s]{0,2048}))?/';
         $this->assertEquals($expected, $pattern);
     }
 
@@ -82,7 +74,7 @@ class ContactsEncoderPatternsTest extends TestCase
     {
         $encoder = $this->createConcreteContactsEncoder($this->getTestParams());
         $pattern = $encoder->getProperty('plain_email_pattern');
-        $expected = '/(\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b\b)/';
+        $expected = '/(\b[_A-Za-z0-9-\.]{1,64}@[_A-Za-z0-9-\.]{1,255}\.[A-Za-z]{2,63}\b\b)/';
         $this->assertEquals($expected, $pattern);
     }
 

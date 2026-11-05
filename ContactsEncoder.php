@@ -18,6 +18,22 @@ class ContactsEncoder
 {
     const VERSION = '2.1.1';
 
+    /**
+     * Found contacts to process per request, all passes of nested render filters together.
+     * A page that exceeds it stays as is instead of running out of the execution time.
+     */
+    const MAX_CONTACT_MATCHES_PER_REQUEST = 200000;
+
+    /**
+     * Possible contacts in one string. Checked before a regular expression: its matches take the memory.
+     */
+    const MAX_CONTACT_SIGNS_PER_CONTENT = 5000;
+
+    /**
+     * Encoded contacts per request. Each one adds about 0.5 KB of markup to all outer passes.
+     */
+    const MAX_ENCODED_CONTACTS_PER_REQUEST = 2000;
+
     protected $api_key;
 
     /**
@@ -43,12 +59,10 @@ class ContactsEncoder
 
     /**
      * Regular expressions parts.
-     * Use backreference \1 so apostrophes (e.g. "Follow iBlogyou's account") inside
-     * double-quoted values don't incorrectly terminate the match.
+     * Lengths are limited by RFC 5321: each attempt to match costs a limited number of steps without PCRE JIT too.
      */
-    const ARIA_LABEL_PATTERN = '/aria-label\s*=\s*(["\'])(?:(?!\1).)*\1/';
-    const EMAIL_PATTERN = '[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b';
-    const EMAIL_PATTERN_DOMAIN_CATCHING = '[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+(\.[A-Za-z]{2,}\b)';
+    const EMAIL_PATTERN = '[_A-Za-z0-9-\.]{1,64}@[_A-Za-z0-9-\.]{1,255}\.[A-Za-z]{2,63}\b';
+    const EMAIL_PATTERN_DOMAIN_CATCHING = '[_A-Za-z0-9-\.]{1,64}@[_A-Za-z0-9-\.]{1,255}(\.[A-Za-z]{2,63}\b)';
     const PHONE_NUMBER = '\+\d{8,12}';
     /**
      * URI schemes are case-insensitive (RFC 3986). Clients often write Mailto:/Tel:.
@@ -65,18 +79,13 @@ class ContactsEncoder
      *  - in plain text there is no closing quote, so the query must stop at the
      *    first whitespace instead of swallowing the rest of the sentence.
      */
-    const MAILTO_QUERY_PATTERN = '(?:\?(?:[^"\'<>]*?(?=["\'])|[^"\'<>\s]*))?';
+    const MAILTO_QUERY_PATTERN = '(?:\?(?:[^"\'<>]{0,2048}?(?=["\'])|[^"\'<>\s]{0,2048}))?';
     const PHONE_NUMBERS_PATTERNS = [
         '(' . self::TEL_SCHEME_PATTERN . self::PHONE_NUMBER . ')', // tel:+XXXXXXXXXX
         '([\+][\s-]?\(?\d[\d\s\-()]{7,}\d)',                       // +X XXX XXXXXXX, +X(XXX)XXXXX, etc.
         '(\(\d{3}\)\s?\d{3}-\d{4})',                               // (XXX) XXX-XXXX, (XXX) XXX XXXX
         '(\+\d{1,3}\.\d{1,3}\.((\d{3}\.\d{4})|\d{7})(?![\w.]))',   // +X?.XX?.XXX.XXXX
     ];
-
-    /**
-     * @var string example: '/aria-label.?=.?[\'"].+?[\'"]/'
-     */
-    protected $aria_regex;
 
     /**
      * @var string example: '/((?i:mailto):\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+\.[A-Za-z]{2,}\b(?:\?(?:[^"\'<>]*?(?=["\'])|[^"\'<>\s]*))?)|(\b[_A-Za-z0-9-\.]+@[_A-Za-z0-9-\.]+(\.[A-Za-z]{2,}\b))/'
@@ -153,6 +162,16 @@ class ContactsEncoder
 
     protected $decoded_contacts_array = [];
 
+    /**
+     * @var int
+     */
+    protected $contact_matches_processed = 0;
+
+    /**
+     * @var int
+     */
+    protected $encoded_contacts_count = 0;
+
     protected static $instance;
 
     public function __construct()
@@ -216,8 +235,6 @@ class ContactsEncoder
 
     private function prepareRegularExpressions()
     {
-        $this->aria_regex = self::ARIA_LABEL_PATTERN;
-
         $this->global_email_pattern = '/(' . self::MAILTO_SCHEME_PATTERN . '\b' . self::EMAIL_PATTERN . self::MAILTO_QUERY_PATTERN . ')|(\b' . self::EMAIL_PATTERN_DOMAIN_CATCHING . ')/';
         $this->global_phones_pattern = '/' . implode('|', self::PHONE_NUMBERS_PATTERNS) . '/';
         $this->global_mailto_pattern = '/' . self::MAILTO_SCHEME_PATTERN . '(' . self::EMAIL_PATTERN . ')' . self::MAILTO_QUERY_PATTERN . '/';
@@ -304,6 +321,11 @@ class ContactsEncoder
      */
     public function modifyGlobalEmails($content)
     {
+        // Nothing to look for, or too much of it.
+        if ( is_string($content) && ( strpos($content, '@') === false || substr_count($content, '@') > self::MAX_CONTACT_SIGNS_PER_CONTENT ) ) {
+            return $content;
+        }
+
         $owns_aria_protection = empty($this->aria_placeholders);
         if ( $owns_aria_protection ) {
             $content = $this->handleAriaLabelContent($content);
@@ -314,6 +336,9 @@ class ContactsEncoder
 
         $match_cursor = 0;
         $match_offsets = $this->collectMatchOffsets($this->global_email_pattern, $content);
+        if ( $this->isContactMatchesBudgetExceeded($match_offsets) ) {
+            return $owns_aria_protection ? $this->handleAriaLabelContent($content, true) : $content;
+        }
         $match_offset_index = 0;
         $replacing_result = preg_replace_callback($this->global_email_pattern, function ($matches) use ($match_offsets, &$match_offset_index, &$match_cursor) {
             if ( ! isset($matches[0]) ) {
@@ -361,8 +386,17 @@ class ContactsEncoder
                 return $matches[0];
             }
 
+            if ( ++$this->encoded_contacts_count > self::MAX_ENCODED_CONTACTS_PER_REQUEST ) {
+                return $matches[0];
+            }
+
             return $this->encodePlainEmail($matches[0]);
         }, $content);
+
+        // A failed regular expression returns null: a guard could have failed as well, encode nothing.
+        if ( ! is_string($replacing_result) ) {
+            $replacing_result = $content;
+        }
 
         if ( $owns_aria_protection ) {
             $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
@@ -381,6 +415,10 @@ class ContactsEncoder
      */
     public function modifyGlobalPhoneNumbers($content)
     {
+        if ( is_string($content) && substr_count($content, '+') + substr_count($content, '(') > self::MAX_CONTACT_SIGNS_PER_CONTENT ) {
+            return $content;
+        }
+
         $owns_aria_protection = empty($this->aria_placeholders);
         if ( $owns_aria_protection ) {
             $content = $this->handleAriaLabelContent($content);
@@ -392,6 +430,9 @@ class ContactsEncoder
         $phones_pattern = $this->global_phones_pattern;
         $match_cursor = 0;
         $match_offsets = $this->collectMatchOffsets($phones_pattern, $content);
+        if ( $this->isContactMatchesBudgetExceeded($match_offsets) ) {
+            return $owns_aria_protection ? $this->handleAriaLabelContent($content, true) : $content;
+        }
         $match_offset_index = 0;
         $replacing_result = preg_replace_callback(
             $phones_pattern,
@@ -446,6 +487,10 @@ class ContactsEncoder
             $content
         );
 
+        if ( ! is_string($replacing_result) ) {
+            $replacing_result = $content;
+        }
+
         if ( $owns_aria_protection ) {
             $replacing_result = $this->handleAriaLabelContent($replacing_result, true);
         }
@@ -491,6 +536,17 @@ class ContactsEncoder
         }
 
         return $position;
+    }
+
+    /**
+     * @param int[] $match_offsets
+     * @return bool
+     */
+    private function isContactMatchesBudgetExceeded($match_offsets)
+    {
+        $this->contact_matches_processed += count($match_offsets);
+
+        return $this->contact_matches_processed > self::MAX_CONTACT_MATCHES_PER_REQUEST;
     }
 
     /**
@@ -565,6 +621,8 @@ class ContactsEncoder
             $obfuscated_string = $is_phone_number
                 ? $obfuscator->processPhone($string)
                 : $obfuscator->processString($string);
+            // The edges stay as they are in the source. A text cut by bytes must not turn into an empty value.
+            $obfuscated_string = htmlspecialchars($obfuscated_string, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8', false);
         }
 
         $string_with_effect = $this->applyEffectsOnMode(
@@ -745,10 +803,10 @@ class ContactsEncoder
      */
     private function constructEncodedSpan($encoded_string, $obfuscated_string)
     {
-        return "<span 
-                data-original-string='" . $encoded_string . "'
-                class='apbct-email-encoder'
-                title='" . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8') . "'>" . $obfuscated_string . "</span>";
+        // One line with double quotes: third-party code may cut the text, and the rest of a page uses double quotes.
+        return '<span data-original-string="' . htmlspecialchars($encoded_string, ENT_QUOTES, 'UTF-8')
+            . '" class="apbct-email-encoder" title="' . htmlspecialchars($this->getTooltip(), ENT_QUOTES, 'UTF-8') . '">'
+            . $obfuscated_string . '</span>';
     }
 
     /**
@@ -961,7 +1019,7 @@ class ContactsEncoder
             }
 
             // A whole tag, with quoted attribute values consumed as a unit so `>` inside them is kept.
-            $tag_pattern = '/<' . preg_quote($tag, '/') . '\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>/i';
+            $tag_pattern = '/<' . preg_quote($tag, '/') . '\b(?:[^>"\']++|"[^"]*+"|\'[^\']*+\')*+>/i';
             // The target attribute inside that tag, value limited to its own quotes.
             $attribute_pattern = '/\s' . preg_quote($attribute, '/') . '\s*=\s*(["\'])(.*?)\1/is';
 
@@ -1016,7 +1074,7 @@ class ContactsEncoder
 
     /**
      * Modify content to skip aria-label cases correctly.
-     * Protects aria-label attributes from email encoding.
+     * Protects aria-label attributes of real tags from email encoding.
      * @param string $content
      * @param bool $reverse
      *
@@ -1026,10 +1084,10 @@ class ContactsEncoder
     {
         if ( !$reverse ) {
             $this->aria_placeholders = array();
-            if ( !$this->isSecureAriaLabelPlaceholderAvailable() ) {
+            if ( !is_string($content) || stripos($content, 'aria-label') === false || !$this->isSecureAriaLabelPlaceholderAvailable() ) {
                 return $content;
             }
-            return preg_replace_callback($this->aria_regex, array($this, 'replaceAriaLabelWithPlaceholder'), $content);
+            return $this->replaceAriaLabelsWithPlaceholders($content);
         }
         if ( !empty($this->aria_placeholders) ) {
             foreach ($this->aria_placeholders as $placeholder => $original) {
@@ -1041,22 +1099,37 @@ class ContactsEncoder
     }
 
     /**
-     * Callback for handleAriaLabelContent to replace each aria-label with a unique placeholder.
-     * @param array $matches
+     * Replace each quoted aria-label attribute with a unique placeholder.
+     * The same text outside of a tag is just a text, and must not hide the markup next to it.
+     *
+     * @param string $content
+     *
      * @return string
      */
-    private function replaceAriaLabelWithPlaceholder($matches)
+    private function replaceAriaLabelsWithPlaceholders($content)
     {
-        if (!isset($matches[0])) {
-            return '';
+        $result = '';
+        $position = 0;
+
+        foreach ( ContactsEncoderHelper::scanMarkup($content) as $token ) {
+            foreach ( $token['attributes'] as $attribute ) {
+                list($name, $name_start, , $value_end, $end) = $attribute;
+                if ( $name !== 'aria-label' || $value_end === $end ) {
+                    continue;
+                }
+
+                $placeholder = $this->generateAriaLabelPlaceholder();
+                if ( $placeholder === null ) {
+                    continue;
+                }
+
+                $this->aria_placeholders[$placeholder] = substr($content, $name_start, $end - $name_start);
+                $result .= substr($content, $position, $name_start - $position) . $placeholder;
+                $position = $end;
+            }
         }
-        $original = $matches[0];
-        $placeholder = $this->generateAriaLabelPlaceholder();
-        if ( $placeholder === null ) {
-            return $original;
-        }
-        $this->aria_placeholders[$placeholder] = $original;
-        return $placeholder;
+
+        return $result . substr($content, $position);
     }
 
     /**

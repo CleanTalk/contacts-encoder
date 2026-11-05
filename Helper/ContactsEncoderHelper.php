@@ -50,10 +50,225 @@ class ContactsEncoderHelper
     private $raw_text_ranges = array();
 
     /**
-     * Sorted list of [start, end) offsets of every attribute value in the indexed content.
-     * @var array[]
+     * Sorted list of [start, end, tag, attribute] of every attribute value in the indexed content.
+     * @var array<int, array{0: int, 1: int, 2: string, 3: string}>
      */
     private $attribute_value_ranges = array();
+
+    /**
+     * Sorted list of [start, end) offsets of the text of every option element in the indexed content.
+     * @var array[]
+     */
+    private $option_text_ranges = array();
+
+    /**
+     * Sorted list of [start, end, attribute names] of the tags with attributes in the indexed content.
+     * @var array<int, array{0: int, 1: int, 2: array<int, string>}>
+     */
+    private $tags_with_attributes = array();
+
+    /**
+     * Elements whose inner text is not markup for a browser, the tokenizer jumps to their end tag.
+     * @var string[]
+     */
+    private static $unparsed_text_tags = array('script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes');
+
+    /**
+     * One linear pass over the content, follows the way a browser splits it into tags.
+     * No PCRE here: the result must not depend on JIT stack or backtrack limits.
+     *
+     * Every token is an array:
+     *  - start, end: offsets of the whole token, the end is exclusive;
+     *  - name: lowercase tag name, `!--` for a comment, `!` for a declaration or a processing instruction;
+     *  - closing: true for an end tag;
+     *  - attributes: list of [name, name_start, value_start, value_end, end]. A value without a quote or
+     *    without a value at all has the same bounds as its `end`.
+     * A tag or a comment that is not closed takes the rest of the content, as it does in a browser.
+     *
+     * @param string $content
+     *
+     * @return array<int, array{start: int, end: int, name: string, closing: bool, attributes: array<int, array{0: string, 1: int, 2: int, 3: int, 4: int}>}>
+     */
+    public static function scanMarkup($content)
+    {
+        $tokens = array();
+
+        if ( ! is_string($content) || $content === '' ) {
+            return $tokens;
+        }
+
+        $length = strlen($content);
+        $offset = 0;
+
+        while ( $offset < $length ) {
+            $start = strpos($content, '<', $offset);
+            if ( $start === false ) {
+                break;
+            }
+
+            $next = $start + 1 < $length ? $content[$start + 1] : '';
+
+            if ( $next === '!' && substr($content, $start, 4) === '<!--' ) {
+                $end = self::findCommentEnd($content, $start, $length);
+                $tokens[] = array('start' => $start, 'end' => $end, 'name' => '!--', 'closing' => false, 'attributes' => array());
+                $offset = $end;
+                continue;
+            }
+
+            if ( $next === '!' || $next === '?' ) {
+                $close = strpos($content, '>', $start);
+                $end = $close === false ? $length : $close + 1;
+                $tokens[] = array('start' => $start, 'end' => $end, 'name' => '!', 'closing' => false, 'attributes' => array());
+                $offset = $end;
+                continue;
+            }
+
+            $closing = $next === '/';
+            $name_start = $closing ? $start + 2 : $start + 1;
+            if ( $name_start >= $length || ! ctype_alpha($content[$name_start]) ) {
+                // Just a "less than" sign in the text.
+                $offset = $start + 1;
+                continue;
+            }
+
+            $token = self::readTag($content, $start, $name_start, $closing, $length);
+            $tokens[] = $token;
+            $offset = $token['end'];
+
+            if ( ! $closing && in_array($token['name'], self::$unparsed_text_tags, true) ) {
+                $close = stripos($content, '</' . $token['name'], $offset);
+                $offset = $close === false ? $length : $close;
+            }
+        }
+
+        return $tokens;
+    }
+
+    /**
+     * @param string $content
+     * @param int $start Offset of `<!--`.
+     * @param int $length
+     *
+     * @return int Exclusive end of the comment.
+     */
+    private static function findCommentEnd($content, $start, $length)
+    {
+        // `<!-->` and `<!--->` are complete comments for a browser.
+        $search_from = $start + 2;
+
+        while ( true ) {
+            $dashes = strpos($content, '--', $search_from);
+            if ( $dashes === false ) {
+                return $length;
+            }
+
+            $tail = substr($content, $dashes + 2, 2);
+            if ( $tail !== '' && $tail[0] === '>' ) {
+                return $dashes + 3;
+            }
+            if ( $tail === '!>' ) {
+                return $dashes + 4;
+            }
+
+            $search_from = $dashes + 1;
+        }
+    }
+
+    /**
+     * @param string $content
+     * @param int $start Offset of `<`.
+     * @param int $name_start
+     * @param bool $closing
+     * @param int $length
+     *
+     * @return array{start: int, end: int, name: string, closing: bool, attributes: array<int, array{0: string, 1: int, 2: int, 3: int, 4: int}>} Token, see scanMarkup().
+     */
+    private static function readTag($content, $start, $name_start, $closing, $length)
+    {
+        $space = " \t\r\n\f";
+        $name_length = strcspn($content, $space . '/>', $name_start);
+        $position = $name_start + $name_length;
+        $token = array(
+            'start' => $start,
+            'end' => $length,
+            'name' => strtolower(substr($content, $name_start, $name_length)),
+            'closing' => $closing,
+            'attributes' => array(),
+        );
+
+        while ( $position < $length ) {
+            $position += strspn($content, $space . '/', $position);
+            if ( $position >= $length ) {
+                break;
+            }
+            if ( $content[$position] === '>' ) {
+                $token['end'] = $position + 1;
+                break;
+            }
+
+            // A leading `=` belongs to the attribute name.
+            $attribute_start = $position;
+            $position += 1 + strcspn($content, $space . '/>=', $position + 1);
+            $attribute_name = strtolower(substr($content, $attribute_start, $position - $attribute_start));
+
+            $after_name = $position + strspn($content, $space, $position);
+            if ( $after_name >= $length || $content[$after_name] !== '=' ) {
+                $token['attributes'][] = array($attribute_name, $attribute_start, $position, $position, $position);
+                continue;
+            }
+
+            $value = $after_name + 1 + strspn($content, $space, $after_name + 1);
+            if ( $value >= $length ) {
+                break;
+            }
+
+            $quote = $content[$value];
+            if ( $quote === '"' || $quote === "'" ) {
+                $close = strpos($content, $quote, $value + 1);
+                if ( $close === false ) {
+                    $token['attributes'][] = array($attribute_name, $attribute_start, $value + 1, $length, $length);
+                    break;
+                }
+                $token['attributes'][] = array($attribute_name, $attribute_start, $value + 1, $close, $close + 1);
+                $position = $close + 1;
+                continue;
+            }
+
+            $value_end = $value + strcspn($content, $space . '>', $value);
+            $token['attributes'][] = array($attribute_name, $attribute_start, $value, $value_end, $value_end);
+            $position = $value_end;
+        }
+
+        return $token;
+    }
+
+    /**
+     * @param array<int, array{start: int, end: int, name: string, closing: bool, attributes: array<int, array{0: string, 1: int, 2: int, 3: int, 4: int}>}> $tokens Sorted result of scanMarkup().
+     * @param int $position
+     *
+     * @return int|false Index of the token containing the offset.
+     *
+     * @psalm-suppress PossiblyUnusedMethod Public API for host apps
+     */
+    public static function findTokenIndex($tokens, $position)
+    {
+        $low = 0;
+        $high = count($tokens) - 1;
+
+        while ( $low <= $high ) {
+            $middle = intdiv($low + $high, 2);
+
+            if ( $position < $tokens[$middle]['start'] ) {
+                $high = $middle - 1;
+            } elseif ( $position >= $tokens[$middle]['end'] ) {
+                $low = $middle + 1;
+            } else {
+                return $middle;
+            }
+        }
+
+        return false;
+    }
 
     /**
      * Checks whether the tag enclosing the given offset already declares the attribute.
@@ -74,58 +289,11 @@ class ContactsEncoderHelper
             return false;
         }
 
-        $tag_start = strrpos(substr($content, 0, $position), '<');
-        if ( $tag_start === false ) {
-            return false;
-        }
+        $this->indexMarkup($content);
 
-        $opening_tag = $this->readOpeningTag($content, $tag_start);
-        if ( $opening_tag === '' ) {
-            return false;
-        }
+        $index = $this->findRangeIndex($this->tags_with_attributes, $position);
 
-        return (bool)preg_match('/[\s\'"]' . preg_quote($attribute, '/') . '\s*=/i', $opening_tag);
-    }
-
-    /**
-     * Reads an opening tag starting at the given offset, honouring quoted attribute values so that
-     * a `>` inside a value does not terminate the tag prematurely.
-     *
-     * @param string $content
-     * @param int $tag_start Offset of the `<` character.
-     *
-     * @return string Empty string when the tag is not closed.
-     */
-    private function readOpeningTag($content, $tag_start)
-    {
-        $length = strlen($content);
-        $quote  = null;
-
-        for ( $i = $tag_start + 1; $i < $length; $i++ ) {
-            $char = $content[$i];
-
-            if ( $quote !== null ) {
-                if ( $char === $quote ) {
-                    $quote = null;
-                }
-                continue;
-            }
-
-            if ( $char === '"' || $char === "'" ) {
-                $quote = $char;
-                continue;
-            }
-
-            if ( $char === '>' ) {
-                return substr($content, $tag_start, $i - $tag_start + 1);
-            }
-
-            if ( $char === '<' ) {
-                return '';
-            }
-        }
-
-        return '';
+        return $index !== false && in_array(strtolower($attribute), $this->tags_with_attributes[$index][2], true);
     }
 
     /**
@@ -169,17 +337,8 @@ class ContactsEncoderHelper
             return false;
         }
 
-        $cc_position = strrpos(substr($content, 0, $position), 'cc=');
-        if ( $cc_position !== false && $cc_position + 3 == $position ) {
-            return true;
-        }
-
-        $bcc_position = strrpos(substr($content, 0, $position), 'bcc=');
-        if ( $bcc_position !== false && $bcc_position + 4 == $position ) {
-            return true;
-        }
-
-        return false;
+        // `bcc=` ends with `cc=`.
+        return $position >= 3 && substr($content, $position - 3, 3) === 'cc=';
     }
 
     /**
@@ -198,22 +357,9 @@ class ContactsEncoderHelper
             return false;
         }
 
-        $last_option_start = strrpos(substr($content, 0, $pos), '<option');
-        if ($last_option_start === false) {
-            return false;
-        }
+        $this->indexMarkup($content);
 
-        $option_tag_end = strpos($content, '>', $last_option_start);
-        if ($option_tag_end === false || $pos <= $option_tag_end) {
-            return false;
-        }
-
-        $option_close = stripos($content, '</option>', $last_option_start);
-        if ($option_close === false) {
-            return false;
-        }
-
-        return $pos > $option_tag_end && $pos < $option_close;
+        return $this->findRangeIndex($this->option_text_ranges, $pos) !== false;
     }
 
     /**
@@ -276,8 +422,11 @@ class ContactsEncoderHelper
         }
 
         $this->indexed_content = $content;
-        $this->raw_text_ranges = $this->buildRawTextRanges($content);
-        $this->attribute_value_ranges = $this->buildAttributeValueRanges($content);
+        // The tokens are big on a big page, only the ranges stay in the memory.
+        $tokens = self::scanMarkup($content);
+        $this->raw_text_ranges = $this->buildElementTextRanges($tokens, $this->raw_text_tags);
+        $this->option_text_ranges = $this->buildElementTextRanges($tokens, array('option'));
+        $this->buildAttributeRanges($tokens);
     }
 
     /**
@@ -306,103 +455,55 @@ class ContactsEncoderHelper
     }
 
     /**
-     * Offsets of every attribute value of every tag in the content.
+     * Offsets of every attribute value and of every tag with attributes.
      *
-     * Tags are matched as a whole first, so a `>` inside a quoted value cannot terminate the tag
-     * early. Attribute values are then located within the tag and their offsets translated back
-     * into offsets of the whole content.
-     *
-     * @param string $content
-     * @return array[] list of [start, end]
+     * @param array<int, array{start: int, end: int, name: string, closing: bool, attributes: array<int, array{0: string, 1: int, 2: int, 3: int, 4: int}>}> $tokens
+     * @return void
      */
-    private function buildAttributeValueRanges($content)
+    private function buildAttributeRanges($tokens)
     {
-        $ranges = array();
+        $this->attribute_value_ranges = array();
+        $this->tags_with_attributes = array();
 
-        $tag_pattern = '/<[a-zA-Z][\w:-]*(?:[^>"\']|"[^"]*"|\'[^\']*\')*>/';
-        if ( ! preg_match_all($tag_pattern, $content, $tag_matches, PREG_OFFSET_CAPTURE) ) {
-            return $ranges;
-        }
-
-        // Quoted values keep their own quotes out of the range, unquoted values stop at whitespace.
-        $attribute_pattern = '/[\s\/][^\s=\/>]+\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'>]+))/';
-
-        if (!isset($tag_matches[0])) {
-            return $ranges;
-        }
-
-        foreach ( $tag_matches[0] as $tag_match ) {
-            if ( ! isset($tag_match[0], $tag_match[1]) ) {
+        foreach ( $tokens as $token ) {
+            if ( empty($token['attributes']) ) {
                 continue;
             }
 
-            $tag = $tag_match[0];
-            $tag_offset = $tag_match[1];
-
-            if ( ! preg_match_all($attribute_pattern, $tag, $attribute_matches, PREG_OFFSET_CAPTURE) ) {
-                continue;
-            }
-
-            foreach ( array(1, 2, 3) as $group ) {
-                if ( ! isset($attribute_matches[$group]) ) {
-                    continue;
-                }
-
-                foreach ( $attribute_matches[$group] as $value_match ) {
-                    if ( ! isset($value_match[0], $value_match[1]) || $value_match[1] < 0 ) {
-                        continue;
-                    }
-
-                    $start = $tag_offset + $value_match[1];
-                    $ranges[] = array($start, $start + strlen($value_match[0]));
+            $names = array();
+            foreach ( $token['attributes'] as $attribute ) {
+                $names[] = $attribute[0];
+                if ( $attribute[3] > $attribute[2] ) {
+                    $this->attribute_value_ranges[] = array($attribute[2], $attribute[3], $token['name'], $attribute[0]);
                 }
             }
+            $this->tags_with_attributes[] = array($token['start'], $token['end'], $names);
         }
-
-        usort($ranges, static function ($left, $right) {
-            if ( $left[0] === $right[0] ) {
-                return 0;
-            }
-
-            return $left[0] < $right[0] ? -1 : 1;
-        });
-
-        return $ranges;
     }
 
     /**
-     * Offsets of the inner text of every raw text tag.
+     * Offsets of the inner text of the given elements.
      *
-     * @param string $content
+     * @param array<int, array{start: int, end: int, name: string, closing: bool, attributes: array<int, array{0: string, 1: int, 2: int, 3: int, 4: int}>}> $tokens
+     * @param string[] $tags
      * @return array[] list of [start, end, tag]
      */
-    private function buildRawTextRanges($content)
+    private function buildElementTextRanges($tokens, $tags)
     {
         $ranges = array();
-        if ( empty($this->raw_text_tags) ) {
-            return $ranges;
-        }
+        $open = null;
 
-        $tags = array();
-        foreach ( $this->raw_text_tags as $tag ) {
-            if ( is_string($tag) && $tag !== '' ) {
-                $tags[] = preg_quote($tag, '/');
-            }
-        }
-
-        if ( empty($tags) ) {
-            return $ranges;
-        }
-
-        $pattern = '/<(' . implode('|', $tags) . ')\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>(.*?)<\/\1\s*>/is';
-
-        if ( preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE) && isset($matches[2]) ) {
-            foreach ( $matches[2] as $index => $match ) {
-                if ( ! isset($match[0], $match[1]) || $match[1] < 0 ) {
-                    continue;
+        foreach ( $tokens as $token ) {
+            if ( $open === null ) {
+                if ( ! $token['closing'] && in_array($token['name'], $tags, true) ) {
+                    $open = $token;
                 }
-                $tag = isset($matches[1][$index][0]) ? strtolower($matches[1][$index][0]) : '';
-                $ranges[] = array($match[1], $match[1] + strlen($match[0]), $tag);
+                continue;
+            }
+
+            if ( $token['closing'] && $token['name'] === $open['name'] ) {
+                $ranges[] = array($open['end'], $token['start'], $token['name']);
+                $open = null;
             }
         }
 
@@ -546,6 +647,8 @@ class ContactsEncoderHelper
             if ( $position === false ) {
                 return false;
             }
+
+            return $this->isPositionInExcludedAttribute($temp_content, $position);
         }
 
         $quoted_match = preg_quote($email_match, '/');
@@ -567,6 +670,40 @@ class ContactsEncoderHelper
 
         foreach ( $this->attribute_exclusions_list as $attribute ) {
             if ( $this->isMatchInsideAttribute($quoted_match, $attribute, $temp_content, null, $position) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param string $content
+     * @param int $position
+     * @return bool
+     */
+    private function isPositionInExcludedAttribute($content, $position)
+    {
+        $this->indexMarkup($content);
+
+        $index = $this->findRangeIndex($this->attribute_value_ranges, $position);
+        if ( $index === false ) {
+            return false;
+        }
+
+        $tag = $this->attribute_value_ranges[$index][2];
+        $attribute = $this->attribute_value_ranges[$index][3];
+
+        if ( in_array($attribute, array_map('strtolower', $this->attribute_exclusions_list), true) ) {
+            return true;
+        }
+
+        foreach ( $this->getWorkingAttributeExclusionsSigns() as $sign_tag => $attributes ) {
+            if (
+                is_string($sign_tag) && is_array($attributes)
+                && strtolower($sign_tag) === $tag
+                && in_array($attribute, array_map('strtolower', array_filter($attributes, 'is_string')), true)
+            ) {
                 return true;
             }
         }
