@@ -106,6 +106,31 @@ class TestContactsEncoderEncodedBudget extends TestCase
         );
     }
 
+    /**
+     * The fallback changes only what the encoding would change: script strings, option texts and other attributes stay.
+     */
+    public function testMaskingWithoutEncodingKeepsTheContextOfTheEncoding()
+    {
+        $encoder = $this->createEncoder();
+        $property = new \ReflectionProperty(ContactsEncoder::class, 'contact_signs_processed');
+        $property->setAccessible(true);
+        $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST);
+
+        $kept = array(
+            '<script>var e = "s@b.cc"; var t = (12345678);</script>',
+            '<input type="text" value="i@b.cc">',
+            '<select><option>o@b.cc</option></select>',
+            '<div data-phone="+1 234 567 8901"></div>',
+        );
+        $result = $encoder->modifyContent(implode('', $kept) . '<a href="mailto:m@b.cc">w</a><p>p@b.cc +1 234 567 8901</p>');
+
+        foreach ( $kept as $part ) {
+            $this->assertStringContainsString($part, $result);
+        }
+        $this->assertStringContainsString('href="mailto:*@*.cc"', $result);
+        $this->assertStringContainsString('<p>*@*.cc +* *** *** **01</p>', $result);
+    }
+
     public function testExcludedContactStaysOpenOverTheLimit()
     {
         $concrete = new class () extends ContactsEncoder {
