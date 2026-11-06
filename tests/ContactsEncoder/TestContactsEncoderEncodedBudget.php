@@ -69,6 +69,27 @@ class TestContactsEncoderEncodedBudget extends TestCase
         $this->assertSame(10, substr_count($result, 'data-original-string'));
     }
 
+    /**
+     * The budget is taken by the signs of possible contacts, found or not, before the regular expression.
+     */
+    public function testSignsBudgetIsTakenBeforeMatching()
+    {
+        $encoder = $this->createEncoder();
+        $property = new \ReflectionProperty(ContactsEncoder::class, 'contact_signs_processed');
+        $property->setAccessible(true);
+
+        $encoder->modifyContent('<p>no contact @ here, one more @</p>');
+        $this->assertSame(2, $property->getValue($encoder));
+
+        $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST - 1);
+        $content = '<p>u@b.cc and v@b.cc</p>';
+        $this->assertSame($content, $encoder->modifyContent($content));
+        $this->assertSame(ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST - 1, $property->getValue($encoder));
+
+        $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST - 2);
+        $this->assertSame(2, substr_count($encoder->modifyContent($content), 'data-original-string'));
+    }
+
     protected function tearDown(): void
     {
         $this->createEncoder()->dropInstance();
