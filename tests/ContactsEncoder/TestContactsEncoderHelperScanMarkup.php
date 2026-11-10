@@ -107,6 +107,22 @@ class TestContactsEncoderHelperScanMarkup extends TestCase
         $this->assertLessThan(2, microtime(true) - $start);
     }
 
+    public function testIndexOfAnEqualCopyIsReusedCheaply()
+    {
+        $content = str_repeat('<abbr title="' . str_repeat('a@b.cd ', 9282) . '">x</abbr>', 12);
+        $copy = substr($content . ' ', 0, -1);
+        $helper = new ContactsEncoderHelper();
+        $helper->findAttributeValueRange($content, 20);
+
+        $start = microtime(true);
+        for ( $i = 0; $i < 20000; $i++ ) {
+            $helper->findAttributeValueRange($copy, 20 + $i);
+        }
+
+        $this->assertLessThan(0.5, microtime(true) - $start);
+        $this->assertSame(array(13, 13 + 9282 * 7), $helper->findAttributeValueRange($copy, 20));
+    }
+
     /**
      * @dataProvider rawTextEndProvider
      */

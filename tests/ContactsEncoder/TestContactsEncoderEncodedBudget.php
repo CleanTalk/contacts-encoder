@@ -131,6 +131,25 @@ class TestContactsEncoderEncodedBudget extends TestCase
         $this->assertStringContainsString('<p>*@*.cc +* *** *** **01</p>', $result);
     }
 
+    /**
+     * Over the limit a page full of contacts in attributes is masked in one pass over the markup.
+     */
+    public function testMaskingWithoutEncodingIsFastOnContactsInAttributes()
+    {
+        $encoder = $this->createEncoder();
+        $property = new \ReflectionProperty(ContactsEncoder::class, 'contact_signs_processed');
+        $property->setAccessible(true);
+        $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST);
+
+        $content = str_repeat('<p>Contacts: <abbr title="' . str_repeat('a@b.cd ', 9282) . '">x</abbr> t@b.cc</p>', 12);
+        $start = microtime(true);
+        $result = $encoder->modifyContent($content);
+
+        $this->assertLessThan(2, microtime(true) - $start);
+        $this->assertSame(12, substr_count($result, 'x</abbr> *@*.cc</p>'));
+        $this->assertSame(12 * 9282, substr_count($result, 'a@b.cd '));
+    }
+
     public function testExcludedContactStaysOpenOverTheLimit()
     {
         $concrete = new class () extends ContactsEncoder {
