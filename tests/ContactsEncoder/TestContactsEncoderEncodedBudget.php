@@ -104,6 +104,7 @@ class TestContactsEncoderEncodedBudget extends TestCase
             'handle' => array('<p>ask @someone (or 12 people) +5</p>'),
             'no dot in the domain' => array('<p>user@localhost</p>'),
             'version' => array('<p>package@1.2.3</p>'),
+            'image' => array('<p><img srcset="logo@2x.png 2x"> logo@2x.PNG</p>'),
             'years' => array('<p>(2019-2020) and (2021-2022)</p>'),
         );
     }
