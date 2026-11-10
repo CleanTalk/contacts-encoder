@@ -282,6 +282,34 @@ class TestContactsEncoderEncodedBudget extends TestCase
         $this->assertSame('<p>+*********01 +**********90</p>', $encoder->modifyContent('<p>+12345678901 +441234567890</p>'));
     }
 
+    /**
+     * Each format the encoding finds is masked over the limit, numbers in a row one by one.
+     *
+     * @dataProvider phoneFormatProvider
+     */
+    public function testPhoneFormatsAreMaskedOverTheLimit($phone)
+    {
+        $encoder = $this->createEncoder();
+        $property = new \ReflectionProperty(ContactsEncoder::class, 'contact_signs_processed');
+        $property->setAccessible(true);
+
+        $property->setValue($encoder, 0);
+        $encoded = $encoder->modifyContent('<p>' . $phone . '</p>');
+        $this->assertStringContainsString('data-original-string', $encoded, 'the encoding finds it');
+
+        $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST);
+        $masked = $encoder->modifyContent('<p>' . $phone . ' ' . $phone . '</p>');
+        $this->assertSame(0, preg_match('/\d{3}/', $masked), $masked);
+    }
+
+    public function phoneFormatProvider()
+    {
+        return array(
+            array('+1 234 567 8901'), array('+1-234-567-8901'), array('+1 (234) 567-8901'), array('+12345678901'),
+            array('(123) 456-7890'), array('(123)456-7890'), array('+1.234.567.8901'), array('+44 20 7946 0958'),
+        );
+    }
+
     public function testAddressWithAnImageLabelInTheDomainIsMasked()
     {
         $encoder = $this->createEncoder();
