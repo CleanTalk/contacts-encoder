@@ -271,6 +271,16 @@ class TestContactsEncoderEncodedBudget extends TestCase
         $this->assertSame('<a href="#">w</a> <a href="#">c</a>', $result);
     }
 
+    public function testPhonesInARowAreMaskedOneByOne()
+    {
+        $encoder = $this->createEncoder();
+        $property = new \ReflectionProperty(ContactsEncoder::class, 'contact_signs_processed');
+        $property->setAccessible(true);
+        $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST);
+
+        $this->assertSame('<p>+*********01 +**********90</p>', $encoder->modifyContent('<p>+12345678901 +441234567890</p>'));
+    }
+
     /**
      * A run of brackets before phones does not hide their start from the fallback.
      */
