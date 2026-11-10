@@ -128,4 +128,27 @@ class ContactsEncoderPatternsTest extends TestCase
         ContactsEncoder::textContainsEmail(str_repeat('a@' . str_repeat('b', 250), 250));
         $this->assertLessThan(0.5, microtime(true) - $start);
     }
+
+    /**
+     * Without PCRE JIT the pattern of an e-mail runs only near the signs of possible addresses: a long text with
+     * one address is not scanned whole. In a separate process, JIT can not be turned off at runtime.
+     */
+    public function testEmailsAreFoundWithoutScanningTheWholeText()
+    {
+        $script = tempnam(sys_get_temp_dir(), 'ce');
+        file_put_contents($script, '<?php require ' . var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true) . ';'
+            . ' $e = new class () extends \\Cleantalk\\Common\\ContactsEncoder\\ContactsEncoder {'
+            . ' protected function checkRequest() { return false; } protected function getCheckRequestComment() { return ""; } };'
+            . ' $p = new \\Cleantalk\\Common\\ContactsEncoder\\Dto\\Params(); $p->api_key = "k"; $p->do_encode_emails = 1; $p->do_encode_phones = 0;'
+            . ' $enc = $e::getInstance($p); $c = str_repeat("a.", 15990) . " x@y.zz " . str_repeat("a.", 15000);'
+            . ' $s = microtime(true); for ($i = 0; $i < 10; $i++) { $out = $enc->modifyContent($c); }'
+            . ' echo json_encode(array((microtime(true) - $s) / 10, substr_count($out, "data-original-string")));');
+        $output = shell_exec(escapeshellarg(PHP_BINARY) . ' -d pcre.jit=0 ' . escapeshellarg($script) . ' 2>&1');
+        unlink($script);
+        $result = json_decode((string)$output, true);
+
+        $this->assertIsArray($result, (string)$output);
+        $this->assertLessThan(0.01, $result[0]);
+        $this->assertSame(1, $result[1]);
+    }
 }
