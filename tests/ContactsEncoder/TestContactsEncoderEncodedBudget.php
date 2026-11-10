@@ -282,6 +282,16 @@ class TestContactsEncoderEncodedBudget extends TestCase
         $this->assertSame('<p>+*********01 +**********90</p>', $encoder->modifyContent('<p>+12345678901 +441234567890</p>'));
     }
 
+    public function testAddressWithAnImageLabelInTheDomainIsMasked()
+    {
+        $encoder = $this->createEncoder();
+        $property = new \ReflectionProperty(ContactsEncoder::class, 'contact_signs_processed');
+        $property->setAccessible(true);
+        $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST);
+
+        $this->assertSame('<p>*****@*****.jpg.example.org logo@2x.png</p>', $encoder->modifyContent('<p>sales@files.jpg.example.org logo@2x.png</p>'));
+    }
+
     /**
      * A run of brackets before phones does not hide their start from the fallback.
      */
