@@ -80,7 +80,7 @@ class TestContactsEncoderEncodedBudget extends TestCase
 
         return array(
             'request budget' => array($contacts, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST),
-            'one string' => array($contacts . str_repeat(' @ ( ', ContactsEncoder::MAX_CONTACT_SIGNS_PER_CONTENT), 0),
+            'one string' => array($contacts . str_repeat(' x@y.zz +1 234 567 8902 ', ContactsEncoder::MAX_CONTACT_SIGNS_PER_CONTENT), 0),
         );
     }
 
@@ -103,6 +103,8 @@ class TestContactsEncoderEncodedBudget extends TestCase
             'css rule' => array('<style>@media print { a { color: red } }</style>'),
             'handle' => array('<p>ask @someone (or 12 people) +5</p>'),
             'no dot in the domain' => array('<p>user@localhost</p>'),
+            'version' => array('<p>package@1.2.3</p>'),
+            'years' => array('<p>(2019-2020) and (2021-2022)</p>'),
         );
     }
 
@@ -127,7 +129,7 @@ class TestContactsEncoderEncodedBudget extends TestCase
         foreach ( $kept as $part ) {
             $this->assertStringContainsString($part, $result);
         }
-        $this->assertStringContainsString('href="mailto:*@*.cc"', $result);
+        $this->assertStringContainsString('<a href="#">w</a>', $result);
         $this->assertStringContainsString('<p>*@*.cc +* *** *** **01</p>', $result);
     }
 
@@ -217,6 +219,7 @@ class TestContactsEncoderEncodedBudget extends TestCase
 
     /**
      * The budget is taken by the signs of possible contacts, found or not, before the regular expression.
+     * A sign that can not be a contact, or an encoded contact seen by an outer pass, takes nothing.
      */
     public function testSignsBudgetIsTakenBeforeMatching()
     {
@@ -224,8 +227,10 @@ class TestContactsEncoderEncodedBudget extends TestCase
         $property = new \ReflectionProperty(ContactsEncoder::class, 'contact_signs_processed');
         $property->setAccessible(true);
 
-        $encoder->modifyContent('<p>no contact @ here, one more @</p>');
-        $this->assertSame(2, $property->getValue($encoder));
+        $encoded = $encoder->modifyContent('<p>no contact @ here, a@b.cc and x@y.zz (2019-2020) +1 234 567 8901</p>');
+        $this->assertSame(3, $property->getValue($encoder));
+        $encoder->modifyContent('<div>' . $encoded . '</div>');
+        $this->assertSame(3, $property->getValue($encoder));
 
         $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST - 1);
         $content = '<p>u@b.cc and v@b.cc</p>';
@@ -234,6 +239,53 @@ class TestContactsEncoderEncodedBudget extends TestCase
 
         $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST - 2);
         $this->assertSame(2, substr_count($encoder->modifyContent($content), 'data-original-string'));
+    }
+
+    /**
+     * Contacts of visitors take their own budget: the contacts of the site owner are encoded anyway.
+     */
+    public function testVisitorContentTakesItsOwnBudget()
+    {
+        $encoder = $this->createEncoder();
+        $comment = '<p>' . str_repeat('v@b.cc, ', ContactsEncoder::MAX_ENCODED_CONTACTS_PER_REQUEST + 1) . '</p>';
+
+        $result = $encoder->modifyVisitorContent($comment);
+        $this->assertSame(ContactsEncoder::MAX_ENCODED_CONTACTS_PER_REQUEST, substr_count($result, 'data-original-string'));
+        $this->assertStringNotContainsString('v@b.cc', $result);
+
+        $this->assertSame(1, substr_count($encoder->modifyContent('<p>owner@example.org</p>'), 'data-original-string'));
+    }
+
+    /**
+     * Over the encoded limit a link does not lead to a masked, other address.
+     */
+    public function testLinksOverTheEncodedLimitAreNotWorking()
+    {
+        $encoder = $this->createEncoder();
+        $property = new \ReflectionProperty(ContactsEncoder::class, 'encoded_contacts_count');
+        $property->setAccessible(true);
+        $property->setValue($encoder, ContactsEncoder::MAX_ENCODED_CONTACTS_PER_REQUEST);
+
+        $result = $encoder->modifyContent('<a href="mailto:m@b.cc">w</a> <a href="tel:+12345678901">c</a>');
+
+        $this->assertSame('<a href="#">w</a> <a href="#">c</a>', $result);
+    }
+
+    /**
+     * A run of brackets before phones does not hide their start from the fallback.
+     */
+    public function testPhonesAfterBracketsAreMasked()
+    {
+        $encoder = $this->createEncoder();
+        $property = new \ReflectionProperty(ContactsEncoder::class, 'contact_signs_processed');
+        $property->setAccessible(true);
+        $property->setValue($encoder, ContactsEncoder::MAX_CONTACT_SIGNS_PER_REQUEST);
+        $reflection = new \ReflectionMethod(ContactsEncoder::class, 'maskPhonesWithoutEncoding');
+        $reflection->setAccessible(true);
+
+        $result = $reflection->invoke($encoder, str_repeat('(', 5001) . '+1 234 567 8901 and +1 987 654 3210');
+
+        $this->assertStringEndsWith('+* *** *** **01 and +* *** *** **10', $result);
     }
 
     protected function tearDown(): void
