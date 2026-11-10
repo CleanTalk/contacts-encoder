@@ -85,4 +85,47 @@ class ContactsEncoderPatternsTest extends TestCase
         $expected = '/(?i:tel):(\+\d{8,12})/';
         $this->assertEquals($expected, $pattern);
     }
+
+    /**
+     * @dataProvider emailTextProvider
+     */
+    public function testTextContainsEmailIsTheEmailPattern($text)
+    {
+        $this->assertSame(
+            (bool)preg_match('/' . ContactsEncoder::EMAIL_PATTERN . '/', $text),
+            ContactsEncoder::textContainsEmail($text),
+            json_encode($text)
+        );
+    }
+
+    public function emailTextProvider()
+    {
+        $texts = array(
+            'Write to a@b.cc', 'a@b.c', '@b.cc', 'a@.cc', 'a@b.cc1', 'a@b.cc_', 'a@b.cc-x', 'a.b@c.d.ef', 'a@b..cc', 'x a@b.cc.',
+            str_repeat('a', 64) . '@b.cc', 'a@' . str_repeat('b', 255) . '.cc', 'a@' . str_repeat('b', 256) . '.cc',
+            'a@b.' . str_repeat('c', 63), 'a@b.' . str_repeat('c', 64), 'a@b.' . str_repeat('c', 64) . '.de', 'é@b.cc', 'a@b.cc"',
+        );
+        mt_srand(7);
+        $alphabet = array('a', 'Z', '1', '_', '-', '.', '@', ' ', '"', "\n");
+        for ( $n = 0; $n < 500; $n++ ) {
+            $text = '';
+            for ( $i = mt_rand(1, 12); $i > 0; $i-- ) {
+                $text .= $alphabet[mt_rand(0, count($alphabet) - 1)];
+            }
+            $texts[] = $text;
+        }
+
+        return array_map(static function ($text) {
+            return array($text);
+        }, $texts);
+    }
+
+    public function testTextContainsEmailIsLinear()
+    {
+        $start = microtime(true);
+        ContactsEncoder::textContainsEmail(str_repeat('@a.', 20600));
+        ContactsEncoder::textContainsEmail(str_repeat('a.', 15990) . '@' . str_repeat('a.', 15990) . '!');
+        ContactsEncoder::textContainsEmail(str_repeat('a@' . str_repeat('b', 250), 250));
+        $this->assertLessThan(0.5, microtime(true) - $start);
+    }
 }
