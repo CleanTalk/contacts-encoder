@@ -198,4 +198,42 @@ class TestContactsEncoderMailtoQuery extends TestCase
         $this->assertStringEndsWith('?', $result);
         $this->assertStringNotContainsString('john@example.com', $result);
     }
+
+    /**
+     * @dataProvider oversizedQueryProvider
+     */
+    public function testOversizedQueryStaysAsIs($content)
+    {
+        $this->assertSame($content, $this->createEncoder()->modifyContent($content));
+    }
+
+    public function oversizedQueryProvider()
+    {
+        $long = str_repeat('x', 3000);
+
+        return array(
+            'attribute' => array('<a href="mailto:a@b.cc?subject=' . $long . '">w</a>'),
+            'attribute with a space' => array('<a href="mailto:a@b.cc?subject=hello ' . $long . '">w</a>'),
+            'copy in the tail' => array('<a href="mailto:a@b.cc?subject=' . $long . '&cc=c@d.ee">w</a>'),
+            'text' => array('<p>mailto:a@b.cc?subject=' . $long . '</p>'),
+        );
+    }
+
+    public function testQueryOfTheLimitLengthIsEncoded()
+    {
+        $query = '?subject=' . str_repeat('x', 2000);
+        $content = '<a href="mailto:a@b.cc' . $query . '">w</a>';
+
+        $this->assertStringContainsString('data-original-string', $this->createEncoder()->modifyContent($content));
+    }
+
+    public function testContactAfterOversizedLinkIsEncoded()
+    {
+        $content = '<a href="mailto:a@b.cc?subject=' . str_repeat('x', 3000) . '">w</a> <a href="mailto:c@d.ee">w</a> e@f.gg';
+        $result = $this->createEncoder()->modifyContent($content);
+
+        $this->assertStringContainsString('mailto:a@b.cc?subject=', $result);
+        $this->assertStringNotContainsString('c@d.ee', $result);
+        $this->assertStringNotContainsString('e@f.gg', $result);
+    }
 }
